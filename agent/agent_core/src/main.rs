@@ -61,6 +61,12 @@ async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
     }
 }
 
+/*
+Обязательно сделать проверку tools call
+А то эта херь имеет свойство выдумывать.
++ динамическую обработку бы
+*/
+
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
