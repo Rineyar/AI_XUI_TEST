@@ -5,12 +5,14 @@ use rig::rig_tool; //fn -> tool
 use rig::tool::ToolExecutionError; //Ошибка для тулза
 use rig::providers::llamafile::LlamafileExt; // Тип клиента
 use rig::prelude::Agent; //Тип данных для агента
+use tokio::process::Command; //Вызов внешних процессов
 
 use std::time::Instant; //Таймер
 
 const MAX_LLM_CALLS: usize = 32; //Максимум вывовов модели
 
-#[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")] //Макрос для обёртки функции в инструмент
+//Макрос для обёртки функции в инструмент
+#[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")]
 async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError> 
 {
     match a.checked_add(b)
@@ -27,7 +29,7 @@ async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError>
     }
 }
 
-#[rig_tool(description = "Add two signed 64-bit integers. Both operands AND their mathematical sum must fit in signed 64-bit range.")] //Макрос для обёртки функции в инструмент
+#[rig_tool(description = "Add two signed 64-bit integers. Both operands AND their mathematical sum must fit in signed 64-bit range.")]
 async fn tool_sum_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError> 
 {
     match a.checked_add(b)
@@ -39,12 +41,12 @@ async fn tool_sum_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 
         None =>
         {
-            return Err(ToolExecutionError::invalid_args("Signed i64 overflow: a + b must be between -2305843009213693952 and 2305843009213693951. Choose different operands."));
+            return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
         }
     }
 }
 
-#[rig_tool(description = "Sub two signed 64-bit integers. Both operands AND their mathematical subtract must fit in signed 64-bit range.")] //Макрос для обёртки функции в инструмент
+#[rig_tool(description = "Sub two signed 64-bit integers. Both operands AND their mathematical subtract must fit in signed 64-bit range.")]
 async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError> 
 {
     match a.checked_sub(b)
@@ -59,6 +61,34 @@ async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
             return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
         }
     }
+}
+
+//Читает файл через py скрипт. 
+//На будущее возвращать в LLM короткую версию ошибки
+#[rig_tool(description = "Read file.")]
+async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+{
+    match Command::new("python") //Вызов пыхтуна
+    .arg("./test.py") //Файл
+    .arg(&filename) //Аргумент
+    .output() //Сбор того, что тот выведет
+    .await //Асинк, че сказать
+    {
+        Ok(out) => //Прочитал
+        {
+            if !out.status.success() //Успех?
+            {
+                return Err(ToolExecutionError::other(String::from_utf8(out.stderr).unwrap())); //Не успех
+            }
+
+            return Ok(String::from_utf8(out.stdout).unwrap()); //Успех
+        }
+
+        Err(err) => //Ошибка вызова
+        {
+            return Err(ToolExecutionError::from_error(err));
+        }
+    }    
 }
 
 /*
@@ -80,16 +110,13 @@ async fn main()
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
     .tool(ToolSubI64)
+    .tool(ReadFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
     let response: String = agent
     .prompt("
-    Add 2 32‑bit numbers of your choice. The result should also be 32‑bit. 
-    Repeat the same with the other numbers. Add these 2 resulting numbers. 
-    When choosing the first 4 numbers, make sure the result of their final sums is 64‑bit. 
-    Then repeat these operations, and subtract the first number from the second 64‑bit number. 
-    Return the result and the operations performed.\n
+    Read value from 1.txt. Then read value from 2.txt. Take sum of this 2 values. Then read value from 3.txt and return sub of sum and 3rd value.
     ") //Запрос
     .await
     .expect("Не отвечает");
