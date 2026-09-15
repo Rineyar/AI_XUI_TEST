@@ -23,7 +23,7 @@ use tools::*;
 */
 
 
-//Docker build - cross build --release --target x86_64-unknown-linux-gnu
+//Docker build: cross +stable build --release --target x86_64-unknown-linux-gnu
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -48,15 +48,13 @@ async fn main()
 
     drop(args_list);
 
-    let agent_builder: AgentBuilder;
-
-    match model_select.as_str()
+    let agent_builder: AgentBuilder = match model_select.as_str()
     {
         "-L" =>
         {
-            let model: Client<_> = Client::from_url(BASE_URL).expect("Локальня модель недоступна"); //Получение по ссылке
+            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).expect("Локальня модель недоступна"); //Получение по ссылке
 
-            agent_builder = model.agent(MODEL_LOCAL_ID);
+            model.agent(MODEL_LOCAL_ID)
         }
 
         "-D" =>
@@ -67,14 +65,14 @@ async fn main()
             .build()
             .expect("Сборка разливного не удалась");
 
-            agent_builder = model.agent(MODEL_DEEPSEEK_ID);
+            model.agent(MODEL_DEEPSEEK_ID)
         }
 
         _ =>
         {
             panic!("Некорректный выбор модели!");
         }
-    }
+    };
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
