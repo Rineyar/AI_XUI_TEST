@@ -6,10 +6,9 @@ use rig::agent::AgentBuilder; //Тип для билдера
 
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 
-use std::mem;
+use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
-use std::env::args;
-
+use std::env::args; //Арги для выбора модели
 
 mod settings; //Настройки ядра
 use settings::*;
