@@ -1,18 +1,29 @@
+#!WARNING!
+#!AI GENERATED!#
+
+# Git
 .git
 .gitignore
+
+# Секреты и локальные настройки
 .env
 *.env
-target/
-agent_core/target/
+*.local
+
+# IDE
+.idea
+.vscode
+
+# Python-мусор
 __pycache__/
 *.pyc
 venv/
 .venv/
-.idea/
-.vscode/
-*.md
-!system_prompt.md
-!skills/*.md
-!tools/*.md
-docker-compose.yaml
-*.local
+
+# Rust 
+agent/agent_core/target/**
+
+# ELF для Docker
+!agent/agent_core/target/x86_64-unknown-linux-gnu/
+!agent/agent_core/target/x86_64-unknown-linux-gnu/release/
+!agent/agent_core/target/x86_64-unknown-linux-gnu/release/agent_core

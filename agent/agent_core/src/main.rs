@@ -2,8 +2,13 @@ use rig::client::AgentClientExt; //.agent метод
 use rig::client::Client; //Тип данных для соединения
 use rig::completion::Prompt; //.prompt метод
 use rig::prelude::Agent; //Тип данных для агента
+use rig::agent::AgentBuilder; //Тип для билдера
+use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 
+use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
+use std::env::args; //Арги для выбора модели
+use std::env::var; //Окружение для API ключа
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -17,15 +22,58 @@ use tools::*;
 + динамическую обработку бы
 */
 
+//Docker build: cross +stable build --release --target x86_64-unknown-linux-gnu
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    let model: Client<_> = Client::from_url(BASE_URL).expect("Не грузит по ссылке"); //Получение по ссылке
+    let mut args_list: Vec<String> = args().collect();
 
-    let agent: Agent = model
-    .agent(MODEL_ID) //Получаем агента по id
+    if args_list.len() == 1
+    {
+        panic!("Укажите модель через -L или -D!");
+    } else if args_list.len() > 2
+    {
+        println!("Обнаружены лишние аргументы:");
+
+        for elem in args_list.iter().skip(2)
+        {
+            println!("{:?}", elem);
+        }
+    }
+
+    let model_select: String = mem::take(&mut args_list[1]);
+
+    drop(args_list);
+
+    let agent_builder: AgentBuilder = match model_select.as_str()
+    {
+        "-L" =>
+        {
+            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).expect("Локальня модель недоступна"); //Получение по ссылке
+
+            model.agent(MODEL_LOCAL_ID)
+        }
+
+        "-D" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+            .build()
+            .expect("Сборка разливного не удалась");
+
+            model.agent(MODEL_DEEPSEEK_ID)
+        }
+
+        _ =>
+        {
+            panic!("Некорректный выбор модели!");
+        }
+    };
+
+    let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)

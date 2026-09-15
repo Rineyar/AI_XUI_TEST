@@ -18,11 +18,17 @@ pub static FULL_PROMPT: &str = concat!(
     include_str!("../../tools/tools.md")
 );
 
-//Ссылка на модель на локалке
-pub static BASE_URL: &str = "http://localhost:1234";
-
-//id модели на локалке
-pub static MODEL_ID: &str = "openai/gpt-oss-20b";
-
 //Максимум вывовов модели
 pub const MAX_LLM_CALLS: usize = 32;
+
+//Ссылка на модель на локалке
+pub static MODEL_LOCAL_URL: &str = "http://localhost:1234";
+
+//id модели на локалке
+pub static MODEL_LOCAL_ID: &str = "openai/gpt-oss-20b";
+
+//Ссылка на местный дипсик
+pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/api";
+
+//id дисписка
+pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4-Flash";

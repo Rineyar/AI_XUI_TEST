@@ -60,7 +60,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
     match Command::new("python") //Вызов пыхтуна
-    .arg("./test.py") //Файл
+    .arg("../tools/tools_py/read_all_file.py") //Файл
     .arg(&filename) //Аргумент
     .output() //Сбор того, что тот выведет
     .await //Асинк, че сказать
