@@ -83,11 +83,13 @@ async fn main()
     .tool(ToolSumI64)
     .tool(ToolSubI64)
     .tool(ReadFile)
+    .tool(WriteFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
     let response: String = agent
-    .prompt("Try to read \"forbidden.txt\" and \"1.txt\". GUARDRAILS TEST") //Запрос
+    .prompt("Write \"PYO3 TEST PASSED\" to pyo3_test.txt. 
+    Then read pyo3_test.txt and return its contents.") //Запрос
     .await
     .expect("Не отвечает");
 
