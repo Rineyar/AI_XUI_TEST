@@ -3,6 +3,9 @@ use rig::client::Client; //Тип данных для соединения
 use rig::completion::Prompt; //.prompt метод
 use rig::prelude::Agent; //Тип данных для агента
 
+// use rig::providers::{deepseek, deepseek::DeepSeekExt}; //Для дипсика местного разлива
+// use rig::client::ModelListingClient; //Получения списка моделей
+
 use std::time::Instant; //Таймер
 
 mod settings; //Настройки ядра
@@ -22,7 +25,17 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    let model: Client<_> = Client::from_url(BASE_URL).expect("Не грузит по ссылке"); //Получение по ссылке
+    let model: Client<_> = Client::from_url(BASE_URL).expect(""); //Получение по ссылке
+
+    // let model: Client<DeepSeekExt> = deepseek::Client::builder() //Сборка клиента
+    // .api_key(DEEPSEEK_LOCAL_API_KEY) //Передать ключ
+    // .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+    // .build()
+    // .expect("Сборка разливного не удалась");
+
+    // let models = model.list_models().await.expect("Не удалось получить список моделей");
+
+    // println!("{:#?}\n{:?}", models, time_start.elapsed());
 
     let agent: Agent = model
     .agent(MODEL_ID) //Получаем агента по id
