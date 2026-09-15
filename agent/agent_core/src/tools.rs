@@ -160,3 +160,26 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
         }
     }    
 }
+
+//Тест-зона
+use pyo3::prelude::*;
+use pyo3::types::PyModule;
+use pyo3::ffi::c_str;
+
+//Пишет текст в файл через ну как бы .py скрипт
+#[rig_tool(description = "Write file.")]
+pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
+{
+    Python::attach(|py: Python<'_>| -> PyResult<()> //По факту замыкание с возвращаемым типом
+    {
+        let module: Bound<'_, PyModule> = PyModule::from_code(py, //Сбор файла из кода
+        c_str!(include_str!("../../tools/tools_py/write_all_file.py")), //Код
+        c"write_file.py", c"write_file")?; //Имя файла и имя модуля
+
+        let function: Bound<'_, PyAny> = module.getattr("write_file")?; //Определение функции из модуля
+
+        function.call1((filename, text))?; //Вызов функции
+
+        Ok(()) //Py отработал
+    }).map_err(ToolExecutionError::from_error) //Если не отработал, то каждый PyErr от ? обернётся в TEE и отправится модельке
+}
