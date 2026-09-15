@@ -14,5 +14,5 @@ venv/
 !system_prompt.md
 !skills/*.md
 !tools/*.md
-postgresql/
 docker-compose.yaml
+*.local
