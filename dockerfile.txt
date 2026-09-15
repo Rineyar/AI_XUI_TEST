@@ -1,31 +1,30 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-trixie
 
-LABEL description="ai security agent"
+#Имя
+LABEL description="Agent runtime test container"
 
-ARG TARGETARCH=amd64
+#Переменные среды
+ENV PYTHONUNBUFFERED=1
+ENV RUST_BACKTRACE=1
 
-ENV PYTHONUNBUFFERED=1 \
-    LLM_BASE_URL=http://host.docker.internal:1234 \
-    DEBIAN_FRONTEND=noninteractive
+#Рабочая область
+WORKDIR /agent/agent_core
 
-WORKDIR /app
+#Взять собранный под контейнер ELF
+COPY agent/agent_core/target/x86_64-unknown-linux-gnu/release/agent_core /agent/agent_core
 
-COPY agent/requirements.txt* ./
-RUN if [ -f requirements.txt ]; then \
-        pip3 install --no-cache-dir --break-system-packages -r requirements.txt; \
-    fi
+#Инструменты агента
+COPY agent/tools/tools_c  /agent/tools/tools_c
+COPY agent/tools/tools_py /agent/tools/tools_py
+COPY agent/tools/tools_rs /agent/tools/tools_rs
 
+#Создание пользователя, выдача прав
+RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
 
-COPY agent/system_prompt.md ./
-COPY agent/skills/main_skills.md ./skills/main_skills.md
-COPY agent/tools/tools.md ./tools/tools.md
+#На будущее сделать agent только read
 
-# Скопировать исполняемый файл
-#COPY bin/agent_core /usr/local/bin/agent_core
-
-RUN useradd -m -u 1000 agent \
-    && chown -R agent:agent /app
+#Дальше пашешь ты
 USER agent
 
-# Выполнить при запуске контейнера
-#ENTRYPOINT ["/usr/local/bin/agent_core"]
+#Запуск
+ENTRYPOINT ["./agent_core", "-D"]
