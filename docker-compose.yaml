@@ -7,6 +7,9 @@ services:
     image: agent-core:test
     container_name: agent-core
 
+    env_file:
+      - .env
+
     environment:
       LLM_BASE_URL: http://host.docker.internal:1234
 
