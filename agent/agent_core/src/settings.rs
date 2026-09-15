@@ -22,10 +22,10 @@ pub static FULL_PROMPT: &str = concat!(
 pub static BASE_URL: &str = "http://localhost:1234";
 
 //Ссылка на местный дипсик
-//pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/";
+pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/api";
 
 //API ключ местного разлива
-//pub static DEEPSEEK_LOCAL_API_KEY: &str = include_str!("../DEEPSEEK_LOCAl_API_KEY.local");
+pub static DEEPSEEK_LOCAL_API_KEY: &str = include_str!("../DEEPSEEK_LOCAl_API_KEY.local");
 
 //id модели на локалке
 pub static MODEL_ID: &str = "openai/gpt-oss-20b";
