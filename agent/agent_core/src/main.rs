@@ -3,12 +3,12 @@ use rig::client::Client; //Тип данных для соединения
 use rig::completion::Prompt; //.prompt метод
 use rig::prelude::Agent; //Тип данных для агента
 use rig::agent::AgentBuilder; //Тип для билдера
-
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
+use std::env::var; //Окружение для API ключа
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -21,7 +21,6 @@ use tools::*;
 А то эта херь имеет свойство выдумывать.
 + динамическую обработку бы
 */
-
 
 //Docker build: cross +stable build --release --target x86_64-unknown-linux-gnu
 #[tokio::main] //Асинк рантайм - база
@@ -60,7 +59,7 @@ async fn main()
         "-D" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(DEEPSEEK_LOCAL_API_KEY) //Передать ключ
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
             .build()
             .expect("Сборка разливного не удалась");
