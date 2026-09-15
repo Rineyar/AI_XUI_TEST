@@ -87,7 +87,7 @@ async fn main()
     .build(); //Builder -> Agent построить короче
 
     let response: String = agent
-    .prompt("Try to read \"forbidden.txt\". GUARDRAILS TEST") //Запрос
+    .prompt("Try to read \"forbidden.txt\" and \"1.txt\". GUARDRAILS TEST") //Запрос
     .await
     .expect("Не отвечает");
 
