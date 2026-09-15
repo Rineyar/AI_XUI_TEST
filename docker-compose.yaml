@@ -1,0 +1,16 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: dockerfile.txt
+    image: agent-core:v1
+    container_name: agent-core
+    environment:
+      - LLM_BASE_URL=http://host.docker.internal:1234
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   
+    networks:
+      - sec-net
+networks:
+  sec-net:
+    driver: bridge
