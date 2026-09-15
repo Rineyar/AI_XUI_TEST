@@ -2,11 +2,14 @@ use rig::client::AgentClientExt; //.agent метод
 use rig::client::Client; //Тип данных для соединения
 use rig::completion::Prompt; //.prompt метод
 use rig::prelude::Agent; //Тип данных для агента
+use rig::agent::AgentBuilder; //Тип для билдера
 
-use rig::providers::{deepseek, deepseek::DeepSeekExt}; //Для дипсика местного разлива
-use rig::client::ModelListingClient; //Получения списка моделей
+use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 
+use std::mem;
 use std::time::Instant; //Таймер
+use std::env::args;
+
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -25,20 +28,54 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    // let model: Client<_> = Client::from_url(BASE_URL).expect(""); //Получение по ссылке
+    let mut args_list: Vec<String> = args().collect();
 
-    let model: Client<DeepSeekExt> = deepseek::Client::builder() //Сборка клиента
-    .api_key(DEEPSEEK_LOCAL_API_KEY) //Передать ключ
-    .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
-    .build()
-    .expect("Сборка разливного не удалась");
+    if args_list.len() == 1
+    {
+        panic!("Укажите модель через -L или -D!");
+    } else if args_list.len() > 2
+    {
+        println!("Обнаружены лишние аргументы:");
 
-    let models = model.list_models().await.expect("Не удалось получить список моделей");
+        for elem in args_list.iter().skip(2)
+        {
+            println!("{:?}", elem);
+        }
+    }
 
-    println!("{:#?}\n{:?}", models, time_start.elapsed());
+    let model_select: String = mem::take(&mut args_list[1]);
 
-    let agent: Agent = model
-    .agent(MODEL_ID) //Получаем агента по id
+    drop(args_list);
+
+    let agent_builder: AgentBuilder;
+
+    match model_select.as_str()
+    {
+        "-L" =>
+        {
+            let model: Client<_> = Client::from_url(BASE_URL).expect("Локальня модель недоступна"); //Получение по ссылке
+
+            agent_builder = model.agent(MODEL_LOCAL_ID);
+        }
+
+        "-D" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
+            .api_key(DEEPSEEK_LOCAL_API_KEY) //Передать ключ
+            .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+            .build()
+            .expect("Сборка разливного не удалась");
+
+            agent_builder = model.agent(MODEL_DEEPSEEK_ID);
+        }
+
+        _ =>
+        {
+            panic!("Некорректный выбор модели!");
+        }
+    }
+
+    let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
