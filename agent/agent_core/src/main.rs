@@ -22,6 +22,8 @@ use tools::*;
 + динамическую обработку бы
 */
 
+
+//Docker build - cross build --release --target x86_64-unknown-linux-gnu
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
