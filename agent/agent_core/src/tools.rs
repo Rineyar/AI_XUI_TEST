@@ -1,4 +1,4 @@
-use rig::rig_tool; //fn -> tool
+use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError; //Ошибка для тулза
 use tokio::process::Command; //Вызов внешних процессов
 use std::process::Stdio; //Для общения с вызовами
@@ -7,6 +7,9 @@ use tokio::process::Child; //Запуск процесса как пиздюка
 use serde::{Serialize, Deserialize}; //Для сборки разборки struct<->json
 use serde_json::{Value, json}; //Json собранный
 use std::process::Output; //Тип ответа
+
+use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
+use std::collections::HashMap; //Они кста тут живут  
 
 #[derive(Serialize, Debug, Clone)]
 struct GuardRequest //Заспрос в гвард
@@ -126,6 +129,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
     }
 }
 
+/*
 //Читает файл через py скрипт. 
 //На будущее возвращать в LLM короткую версию ошибки
 #[rig_tool(description = "Read file.")]
@@ -160,26 +164,73 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
         }
     }    
 }
+*/
 
 //Тест-зона
-// use pyo3::prelude::*;
-// use pyo3::types::PyModule;
-// use pyo3::ffi::c_str;
+use pyo3::prelude::*;
 
-// //Пишет текст в файл через ну как бы .py скрипт
-// #[rig_tool(description = "Write file.")]
-// pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
-// {
-//     Python::attach(|py: Python<'_>| -> PyResult<()> //По факту замыкание с возвращаемым типом
-//     {
-//         let module: Bound<'_, PyModule> = PyModule::from_code(py, //Сбор файла из кода
-//         c_str!(include_str!("../../tools/tools_py/write_all_file.py")), //Код
-//         c"write_file.py", c"write_file")?; //Имя файла и имя модуля
+#[rig_tool(description = "Write file.")]
+pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
+{
+    let verdict: GuardResponse = tools_guard(String::from("write_file"), json!({ "filename": filename, "text": text })).await;
 
-//         let function: Bound<'_, PyAny> = module.getattr("write_file")?; //Определение функции из модуля
+    if !verdict.allowed
+    {
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
 
-//         function.call1((filename, text))?; //Вызов функции
+    let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
 
-//         Ok(()) //Py отработал
-//     }).map_err(ToolExecutionError::from_error) //Если не отработал, то каждый PyErr от ? обернётся в TEE и отправится модельке
-// }
+    let func: &Py<PyAny> = py_env.get("files").unwrap().funcs.get("write_file").unwrap();
+
+    return Python::attach(|py: Python<'_>| -> PyResult<()>
+    {
+        func.call1(py, (filename, text))?;
+
+        Ok(())
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(description = "Read file.")]
+pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+{
+    let verdict: GuardResponse = tools_guard(String::from("read_file"), json!({ "filename": filename })).await;
+
+    if !verdict.allowed
+    {
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
+
+    let func: &Py<PyAny> = py_env.get("files").unwrap().funcs.get("read_file").unwrap();
+
+    return Python::attach(|py: Python<'_>| -> PyResult<String>
+    {
+        return func.call1(py, (filename,))?.extract(py);
+    }).map_err(ToolExecutionError::from_error);
+}
+
+/*
+use pyo3::prelude::*;
+use pyo3::types::PyModule;
+use pyo3::ffi::c_str;
+
+//Пишет текст в файл через ну как бы .py скрипт
+#[rig_tool(description = "Write file.")]
+pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
+{
+    Python::attach(|py: Python<'_>| -> PyResult<()> //По факту замыкание с возвращаемым типом
+    {
+        let module: Bound<'_, PyModule> = PyModule::from_code(py, //Сбор файла из кода
+        c_str!(include_str!("../../tools/tools_py/write_all_file.py")), //Код
+        c"write_file.py", c"write_file")?; //Имя файла и имя модуля
+
+        let function: Bound<'_, PyAny> = module.getattr("write_file")?; //Определение функции из модуля
+
+        function.call1((filename, text))?; //Вызов функции
+
+        Ok(()) //Py отработал
+    }).map_err(ToolExecutionError::from_error) //Если не отработал, то каждый PyErr от ? обернётся в TEE и отправится модельке
+}
+*/
