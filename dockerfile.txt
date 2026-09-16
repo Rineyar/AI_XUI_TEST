@@ -1,4 +1,5 @@
-FROM python:3.14-slim-trixie
+#FROM python:3.14-slim-trixie
+FROM python:3.12-slim
 
 #Имя
 LABEL description="Agent runtime test container"
@@ -17,6 +18,9 @@ COPY agent/agent_core/target/x86_64-unknown-linux-gnu/release/agent_core /agent/
 COPY agent/tools/tools_c  /agent/tools/tools_c
 COPY agent/tools/tools_py /agent/tools/tools_py
 COPY agent/tools/tools_rs /agent/tools/tools_rs
+
+#Гвард
+COPY agent/guards.py /agent/guards.py
 
 #Создание пользователя, выдача прав
 RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
