@@ -14,10 +14,13 @@ WORKDIR /agent/agent_core
 #Взять собранный под контейнер ELF
 COPY agent/agent_core/target/x86_64-unknown-linux-gnu/release/agent_core /agent/agent_core
 
-#Инструменты агента
-COPY agent/tools/tools_c  /agent/tools/tools_c
-COPY agent/tools/tools_py /agent/tools/tools_py
-COPY agent/tools/tools_rs /agent/tools/tools_rs
+# #Инструменты агента Теперь собраны внутри агента
+# COPY agent/tools/tools_c  /agent/tools/tools_c
+# COPY agent/tools/tools_py /agent/tools/tools_py
+# COPY agent/tools/tools_rs /agent/tools/tools_rs
+
+#Добавить необходимые библиотеки питону
+RUN pip install --no-cache-dir requests
 
 #Гвард
 COPY agent/guards.py /agent/guards.py
