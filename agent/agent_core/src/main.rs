@@ -24,8 +24,11 @@ use tools::*;
 + динамическую обработку бы
 */
 
-//Docker build: cross +stable build --release --target x86_64-unknown-linux-gnu
+//Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
 //Если не может подсосать файлы, то $env:AGENT_ROOT = (Resolve-Path "..").Path
+
+//После docker compose build --no-cache
+//docker compose up --force-recreate
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
