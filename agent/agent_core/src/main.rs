@@ -98,6 +98,7 @@ async fn main()
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
+    .tool(EnvDump)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
@@ -105,7 +106,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Do GET request to https://deepcode.ci.nsu.ru/api/models and write result to get.txt
+    Write local ENV to env.txt
     ") //Запрос
     .await
     .expect("Не отвечает");
