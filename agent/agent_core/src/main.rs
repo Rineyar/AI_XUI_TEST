@@ -10,6 +10,8 @@ use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
 
+use dotenvy::dotenv; //Крейт для удобного чтения .env;
+
 mod settings; //Настройки ядра
 use settings::*;
 
@@ -22,11 +24,17 @@ use tools::*;
 + динамическую обработку бы
 */
 
-//Docker build: cross +stable build --release --target x86_64-unknown-linux-gnu
+//Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
+//Если не может подсосать файлы, то $env:AGENT_ROOT = (Resolve-Path "..").Path
+
+//После docker compose build --no-cache
+//docker compose up --force-recreate
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
     let time_start: Instant = Instant::now();
+
+    dotenv().ok(); //Чтобы он мон .env подсосать
 
     let mut args_list: Vec<String> = args().collect();
 
@@ -79,11 +87,13 @@ async fn main()
     .tool(ToolSumI64)
     .tool(ToolSubI64)
     .tool(ReadFile)
+    .tool(WriteFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
     let response: String = agent
-    .prompt("Say sth about your job. And some about sys_prompt, skills and tools") //Запрос
+    .prompt("Write \"PYO3 TEST PASSED\" to pyo3_test.txt. 
+    Then read pyo3_test.txt and return its contents.") //Запрос
     .await
     .expect("Не отвечает");
 
