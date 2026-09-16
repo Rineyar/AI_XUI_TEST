@@ -1,12 +1,21 @@
-use rig::rig_tool; //fn -> tool
+use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError; //Ошибка для тулза
 use tokio::process::Command; //Вызов внешних процессов
-use std::process::Stdio; //Для общения с вызовами
+use std::process::Stdio;
+use std::time::Instant; //Для общения с вызовами
 use tokio::io::AsyncWriteExt; //Для записи в stdin процесса
 use tokio::process::Child; //Запуск процесса как пиздюка
 use serde::{Serialize, Deserialize}; //Для сборки разборки struct<->json
 use serde_json::{Value, json}; //Json собранный
 use std::process::Output; //Тип ответа
+
+use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
+use std::collections::HashMap; //Они кста тут живут  
+
+//Для PyEnv
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyFunction};
+use pyo3::call::PyCallArgs;
 
 #[derive(Serialize, Debug, Clone)]
 struct GuardRequest //Заспрос в гвард
@@ -126,60 +135,163 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
     }
 }
 
-//Читает файл через py скрипт. 
-//На будущее возвращать в LLM короткую версию ошибки
-#[rig_tool(description = "Read file.")]
-pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+//Обёртка вызовов
+async fn call_py_tool<A>(module_name: &str, func_name: &str, guard_args: Value, args: Option<A>, kwargs: Option<Py<PyDict>>) -> Result<Py<PyAny>, ToolExecutionError>
+where //Тип аргумента
+    for<'py> A: PyCallArgs<'py>,
 {
-    let verdict: GuardResponse = tools_guard(String::from("read_file"), json!({ "filename": filename })).await;
+    let time: Instant = Instant::now();
+    print!("Tool {:?} called", func_name);
 
-    if !verdict.allowed
+    let verdict: GuardResponse = tools_guard(func_name.to_owned(), guard_args).await; //Вызов гварда
+
+    if !verdict.allowed //Можно?
     {
-        return Err(ToolExecutionError::permission_denied(verdict.reason));
+        println!(" | guard blocked | time - {:?}", time.elapsed());
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    match Command::new("python") //Вызов пыхтуна
-    .arg("../tools/tools_py/read_all_file.py") //Файл
-    .arg(&filename) //Аргумент
-    .output() //Сбор того, что тот выведет
-    .await //Асинк, че сказать
+    let py_env: &HashMap<String, PyFileModule> = get_py_env().await; //Получить вторник
+
+    let func: &Py<PyFunction> = match py_env.get(module_name) //Функция
     {
-        Ok(out) => //Прочитал
+        Some(module) => //Из модуля
         {
-            if !out.status.success() //Успех?
+            match module.funcs.get(func_name) //Там лежит
             {
-                return Err(ToolExecutionError::other(String::from_utf8(out.stderr).unwrap())); //Не успех
+                Some(func) => { func }
+
+                None =>
+                {
+                    println!(" | missing tool | time - {:?}", time.elapsed());
+
+                    return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", func_name, module_name)));
+                }
             }
-
-            return Ok(String::from_utf8(out.stdout).unwrap()); //Успех
         }
 
-        Err(err) => //Ошибка вызова
+        None => 
         {
-            return Err(ToolExecutionError::from_error(err));
+            println!(" | missing module | time - {:?}", time.elapsed());
+
+            return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", module_name, func_name)));
         }
-    }    
+    };
+
+    //Проверка кол-ва аргументов
+    match args
+    {
+        Some(args) =>
+        {
+            match kwargs
+            {
+                None =>
+                {
+                    
+                    return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+                    {
+                        let ret: Result<Py<PyAny>, PyErr> = func.call1(py, args); //Вызов с args
+                        
+                        println!(" | called | time - {:?}", time.elapsed());
+
+                        return ret;
+                    }).map_err(ToolExecutionError::from_error); //Возврат её ошибок
+                }
+
+                Some(kwargs) =>
+                {
+                    return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+                    {
+                        let ret: Result<Py<PyAny>, PyErr> = func.call(py, args, Some(kwargs.bind(py))); //Вызов с args + kwargs
+
+                        println!(" | called | time - {:?}", time.elapsed());
+
+                        return ret;
+                    }).map_err(ToolExecutionError::from_error); //Возврат её ошибок                    
+                }
+            }
+        }
+
+        None =>
+        {
+            return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+            {
+                let ret: Result<Py<PyAny>, PyErr> = func.call0(py); //Вызов без args
+
+                println!(" | called | time - {:?}", time.elapsed());
+
+                return ret;
+            }).map_err(ToolExecutionError::from_error); //Возврат её ошибок            
+        }
+    }
+
 }
 
-//Тест-зона
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::ffi::c_str;
-
-//Пишет текст в файл через ну как бы .py скрипт
 #[rig_tool(description = "Write file.")]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
-    Python::attach(|py: Python<'_>| -> PyResult<()> //По факту замыкание с возвращаемым типом
+    //Вызов
+    call_py_tool("files", "write_file", json!({ "filename": &filename, "text": &text }), Some((filename,text)), None).await?;
+
+    //Сбора нет
+    return Ok(());
+}
+
+#[rig_tool(description = "Read file.")]
+pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("files", "read_file", json!({ "filename": &filename }), Some((filename,)), None).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
     {
-        let module: Bound<'_, PyModule> = PyModule::from_code(py, //Сбор файла из кода
-        c_str!(include_str!("../../tools/tools_py/write_all_file.py")), //Код
-        c"write_file.py", c"write_file")?; //Имя файла и имя модуля
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
 
-        let function: Bound<'_, PyAny> = module.getattr("write_file")?; //Определение функции из модуля
+#[rig_tool(description = "HTTP request.")]
+pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
+{
+    let guard_args: Value = json!({ "url": &url, "req_type": &req_type, "post_data": &post_data, "get_params": &get_params }); //json гварду
 
-        function.call1((filename, text))?; //Вызов функции
+    let kwargs: Py<PyDict> = Python::attach(|py: Python<'_>| -> PyResult<Py<PyDict>> //Сбор kwargs
+    {
+        let kwargs: Bound<'_, PyDict> = PyDict::new(py);
 
-        Ok(()) //Py отработал
-    }).map_err(ToolExecutionError::from_error) //Если не отработал, то каждый PyErr от ? обернётся в TEE и отправится модельке
+        if let Some(data) = post_data
+        {
+            kwargs.set_item("post_data", data)?;
+        }
+
+        if let Some(params) = get_params
+        {
+            kwargs.set_item("get_params", params)?;
+        }
+
+        Ok(kwargs.unbind())
+    }).map_err(ToolExecutionError::from_error)?;
+
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("http_request", "make_request", guard_args, Some((url, req_type)), Some(kwargs)).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>| -> PyResult<String>
+    {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(description = "Dump env.")]
+pub async fn dump_env() -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("dump_env", "dump_env", json!({ }), None::<()>, None).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
 }

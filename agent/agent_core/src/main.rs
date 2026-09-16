@@ -18,6 +18,9 @@ use settings::*;
 mod tools; //Инструменты
 use tools::*;
 
+mod py_env; //Py среда
+use py_env::*;
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -81,6 +84,12 @@ async fn main()
         }
     };
 
+    println!("Client loaded - {:?}", time_start.elapsed());
+
+    load_py_env().await; //Создание Py субботы
+
+    println!("PyEnv loaded - {:?}", time_start.elapsed());
+
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
     .tool(ToolSumI32) //Инструмент добавили
@@ -88,25 +97,19 @@ async fn main()
     .tool(ToolSubI64)
     .tool(ReadFile)
     .tool(WriteFile)
+    .tool(HttpRequest)
+    .tool(DumpEnv)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
+    println!("Agent builded - {:?}", time_start.elapsed());
+
     let response: String = agent
-    .prompt("Write \"PYO3 TEST PASSED\" to pyo3_test.txt. 
-    Then read pyo3_test.txt and return its contents.") //Запрос
+    .prompt("
+    None
+    ") //Запрос
     .await
     .expect("Не отвечает");
 
     println!("{}\n{:?}", response, time_start.elapsed());
 }
-
-    /* //Подробный ответ от агента
-    use rig::agent::PromptResponse;
-    let response: PromptResponse = agent
-    .prompt("Sum two 32-bit integers of your choice. You must use the tool.")
-    .extended_details()
-    .await
-    .expect("Не отвечает");
-
-    println!("{:?}\n{:?}\n{:?}", response.content, response.usage, time_start.elapsed());
-    */
