@@ -1,5 +1,5 @@
 use pyo3::prelude::*; //Для работы с PyO3
-use pyo3::types::PyModule; //Тип для модуля
+use pyo3::types::{PyFunction, PyModule}; //Тип для модуля и функции
 
 use std::{ffi::CString, str::FromStr}; //Спецстроки
 use std::collections::HashMap; //Таблица для хранения структур
@@ -15,7 +15,7 @@ static PY_TOOLS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py"); //
 pub struct PyFileModule //Структура с модулем и его функциями
 {
     pub module: Py<PyModule>,
-    pub funcs: HashMap<String, Py<PyAny>>,
+    pub funcs: HashMap<String, Py<PyFunction>>,
 }
 
 impl PyFileModule //Имплементация ей функции создания
@@ -81,6 +81,7 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
 
                 //Взять функцию
                 let func: Bound<'_, PyAny> = module.getattr(funcname.as_str()).expect("Ошибка получения функии из модуля");
+                let func: &Bound<'_, PyFunction> = func.cast::<PyFunction>().expect("Объект из __all__ не является функцией");
 
                 //Проверить
                 if !func.is_callable()
@@ -89,7 +90,7 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
                 }
 
                 //Добавить в таблицу
-                module_elem.funcs.insert(funcname, func.unbind());
+                module_elem.funcs.insert(funcname, func.clone().unbind());
             }
         }
     });
