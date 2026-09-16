@@ -1,7 +1,8 @@
 use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError; //Ошибка для тулза
 use tokio::process::Command; //Вызов внешних процессов
-use std::process::Stdio; //Для общения с вызовами
+use std::process::Stdio;
+use std::time::Instant; //Для общения с вызовами
 use tokio::io::AsyncWriteExt; //Для записи в stdin процесса
 use tokio::process::Child; //Запуск процесса как пиздюка
 use serde::{Serialize, Deserialize}; //Для сборки разборки struct<->json
@@ -139,10 +140,15 @@ async fn call_py_tool<A>(module_name: &str, func_name: &str, guard_args: Value, 
 where //Тип аргумента
     for<'py> A: PyCallArgs<'py>,
 {
+    let time: Instant = Instant::now();
+    print!("Tool {:?} called", func_name);
+
     let verdict: GuardResponse = tools_guard(func_name.to_owned(), guard_args).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
+        println!(" | guard blocked | time - {:?}", time.elapsed());
+
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
@@ -158,6 +164,8 @@ where //Тип аргумента
 
                 None =>
                 {
+                    println!(" | missing tool | time - {:?}", time.elapsed());
+
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", func_name, module_name)));
                 }
             }
@@ -165,6 +173,8 @@ where //Тип аргумента
 
         None => 
         {
+            println!(" | missing module | time - {:?}", time.elapsed());
+
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", module_name, func_name)));
         }
     };
@@ -178,9 +188,14 @@ where //Тип аргумента
             {
                 None =>
                 {
+                    
                     return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
                     {
-                        func.call1(py, args) //Вызов с args
+                        let ret: Result<Py<PyAny>, PyErr> = func.call1(py, args); //Вызов с args
+                        
+                        println!(" | called | time - {:?}", time.elapsed());
+
+                        return ret;
                     }).map_err(ToolExecutionError::from_error); //Возврат её ошибок
                 }
 
@@ -188,7 +203,11 @@ where //Тип аргумента
                 {
                     return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
                     {
-                        func.call(py, args, Some(kwargs.bind(py))) //Вызов с args + kwargs
+                        let ret: Result<Py<PyAny>, PyErr> = func.call(py, args, Some(kwargs.bind(py))); //Вызов с args + kwargs
+
+                        println!(" | called | time - {:?}", time.elapsed());
+
+                        return ret;
                     }).map_err(ToolExecutionError::from_error); //Возврат её ошибок                    
                 }
             }
@@ -198,7 +217,11 @@ where //Тип аргумента
         {
             return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
             {
-                func.call0(py) //Вызов без args
+                let ret: Result<Py<PyAny>, PyErr> = func.call0(py); //Вызов без args
+
+                println!(" | called | time - {:?}", time.elapsed());
+
+                return ret;
             }).map_err(ToolExecutionError::from_error); //Возврат её ошибок            
         }
     }
@@ -260,11 +283,11 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Env dump.")]
-pub async fn env_dump() -> Result<String, ToolExecutionError>
+#[rig_tool(description = "Dump env.")]
+pub async fn dump_env() -> Result<String, ToolExecutionError>
 {
     //Вызов
-    let res: Py<PyAny> = call_py_tool("env_dump", "env_dump", json!({ }), None::<()>, None).await?;
+    let res: Py<PyAny> = call_py_tool("dump_env", "dump_env", json!({ }), None::<()>, None).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
