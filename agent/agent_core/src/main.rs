@@ -84,7 +84,11 @@ async fn main()
         }
     };
 
+    println!("Client loaded - {:?}", time_start.elapsed());
+
     load_py_env().await; //Создание Py субботы
+
+    println!("PyEnv loaded - {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -95,6 +99,8 @@ async fn main()
     .tool(WriteFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
+
+    println!("Agent builded - {:?}", time_start.elapsed());
 
     let response: String = agent
     .prompt("Write \"PY_ENV TEST PASSED\" to py_env_test.txt. 
