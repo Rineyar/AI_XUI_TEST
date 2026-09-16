@@ -1,5 +1,6 @@
 # Требует requests для работы
 import requests
+import json
 
 __all__ = ["make_request"]
 
@@ -51,7 +52,7 @@ def make_request(url : str, req_type : str = "get", *,
     else:
         output["error"] = error
 
-    return output
+    return json.dumps(output)
             
 if __name__ == "__main__":
     make_request("https://ya.ru")
