@@ -11,6 +11,11 @@ use std::process::Output; //Тип ответа
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use std::collections::HashMap; //Они кста тут живут  
 
+//Для PyEnv
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyFunction};
+use pyo3::call::PyCallArgs;
+
 #[derive(Serialize, Debug, Clone)]
 struct GuardRequest //Заспрос в гвард
 {
@@ -129,113 +134,128 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
     }
 }
 
-/*
-//Читает файл через py скрипт. 
-//На будущее возвращать в LLM короткую версию ошибки
-#[rig_tool(description = "Read file.")]
-pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+//Обёртка вызовов
+async fn call_py_tool<A>(module_name: &str, func_name: &str, guard_args: Value, args: Option<A>, kwargs: Option<Py<PyDict>>) -> Result<Py<PyAny>, ToolExecutionError>
+where //Тип аргумента
+    for<'py> A: PyCallArgs<'py>,
 {
-    let verdict: GuardResponse = tools_guard(String::from("read_file"), json!({ "filename": filename })).await;
+    let verdict: GuardResponse = tools_guard(func_name.to_owned(), guard_args).await; //Вызов гварда
 
-    if !verdict.allowed
+    if !verdict.allowed //Можно?
     {
-        return Err(ToolExecutionError::permission_denied(verdict.reason));
+        return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    match Command::new("python") //Вызов пыхтуна
-    .arg("../tools/tools_py/read_all_file.py") //Файл
-    .arg(&filename) //Аргумент
-    .output() //Сбор того, что тот выведет
-    .await //Асинк, че сказать
+    let py_env: &HashMap<String, PyFileModule> = get_py_env().await; //Получить вторник
+
+    let func: &Py<PyFunction> = match py_env.get(module_name) //Функция
     {
-        Ok(out) => //Прочитал
+        Some(module) => //Из модуля
         {
-            if !out.status.success() //Успех?
+            match module.funcs.get(func_name) //Там лежит
             {
-                return Err(ToolExecutionError::other(String::from_utf8(out.stderr).unwrap())); //Не успех
+                Some(func) => { func }
+
+                None =>
+                {
+                    return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", func_name, module_name)));
+                }
             }
-
-            return Ok(String::from_utf8(out.stdout).unwrap()); //Успех
         }
 
-        Err(err) => //Ошибка вызова
+        None => 
         {
-            return Err(ToolExecutionError::from_error(err));
+            return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", module_name, func_name)));
         }
-    }    
-}
-*/
+    };
 
-//Тест-зона
-use pyo3::prelude::*;
-use pyo3::types::PyFunction;
+    //Проверка кол-ва аргументов
+    match args
+    {
+        Some(args) =>
+        {
+            match kwargs
+            {
+                None =>
+                {
+                    return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+                    {
+                        func.call1(py, args) //Вызов с args
+                    }).map_err(ToolExecutionError::from_error); //Возврат её ошибок
+                }
+
+                Some(kwargs) =>
+                {
+                    return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+                    {
+                        func.call(py, args, Some(kwargs.bind(py))) //Вызов с args + kwargs
+                    }).map_err(ToolExecutionError::from_error); //Возврат её ошибок                    
+                }
+            }
+        }
+
+        None =>
+        {
+            return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>> 
+            {
+                func.call0(py) //Вызов без args
+            }).map_err(ToolExecutionError::from_error); //Возврат её ошибок            
+        }
+    }
+
+}
 
 #[rig_tool(description = "Write file.")]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
-    let verdict: GuardResponse = tools_guard(String::from("write_file"), json!({ "filename": filename, "text": text })).await;
+    //Вызов
+    call_py_tool("files", "write_file", json!({ "filename": &filename, "text": &text }), Some((filename,text)), None).await?;
 
-    if !verdict.allowed
+    //Сбора нет
+    return Ok(());
+}
+
+#[rig_tool(description = "Read file.")]
+pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("files", "read_file", json!({ "filename": &filename }), Some((filename,)), None).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
     {
-        return Err(ToolExecutionError::permission_denied(verdict.reason));
-    }
-
-    let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
-
-    let func = py_env.get("files").unwrap().funcs.get("write_file").unwrap();
-
-    return Python::attach(|py: Python<'_>| -> PyResult<()>
-    {
-        func.call1(py, (filename, text))?;
-
-        Ok(())
+        res.extract::<String>(py) //Принят return как String
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Read file.")]
-pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
+#[rig_tool(description = "HTTP request.")]
+pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
 {
-    let verdict: GuardResponse = tools_guard(String::from("read_file"), json!({ "filename": filename })).await;
+    let guard_args: Value = json!({ "url": &url, "req_type": &req_type, "post_data": &post_data, "get_params": &get_params }); //json гварду
 
-    if !verdict.allowed
+    let kwargs: Py<PyDict> = Python::attach(|py: Python<'_>| -> PyResult<Py<PyDict>> //Сбор kwargs
     {
-        return Err(ToolExecutionError::permission_denied(verdict.reason));
-    }
+        let kwargs: Bound<'_, PyDict> = PyDict::new(py);
 
-    let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
+        if let Some(data) = post_data
+        {
+            kwargs.set_item("post_data", data)?;
+        }
 
-    let func: &Py<PyFunction> = py_env.get("files").unwrap().funcs.get("read_file").unwrap();
+        if let Some(params) = get_params
+        {
+            kwargs.set_item("get_params", params)?;
+        }
 
+        Ok(kwargs.unbind())
+    }).map_err(ToolExecutionError::from_error)?;
+
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("http_request", "make_request", guard_args, Some((url, req_type)), Some(kwargs)).await?;
+
+    //Сбор результата
     return Python::attach(|py: Python<'_>| -> PyResult<String>
     {
-        let func: &Bound<'_, PyFunction> = func.bind(py);
-        let result: Bound<'_, PyAny> = func.call1((filename,))?;
-
-        result.extract()
-    })
-    .map_err(ToolExecutionError::from_error);
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
 }
-
-/*
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::ffi::c_str;
-
-//Пишет текст в файл через ну как бы .py скрипт
-#[rig_tool(description = "Write file.")]
-pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
-{
-    Python::attach(|py: Python<'_>| -> PyResult<()> //По факту замыкание с возвращаемым типом
-    {
-        let module: Bound<'_, PyModule> = PyModule::from_code(py, //Сбор файла из кода
-        c_str!(include_str!("../../tools/tools_py/write_all_file.py")), //Код
-        c"write_file.py", c"write_file")?; //Имя файла и имя модуля
-
-        let function: Bound<'_, PyAny> = module.getattr("write_file")?; //Определение функции из модуля
-
-        function.call1((filename, text))?; //Вызов функции
-
-        Ok(()) //Py отработал
-    }).map_err(ToolExecutionError::from_error) //Если не отработал, то каждый PyErr от ? обернётся в TEE и отправится модельке
-}
-*/
