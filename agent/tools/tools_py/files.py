@@ -1,6 +1,6 @@
 def read_file(filename):
     with open(filename, "r") as file:
-        print(file.read())
+        return file.read()
 
 def write_file(filename, text):
     with open(filename, "w") as file:
