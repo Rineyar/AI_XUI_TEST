@@ -97,14 +97,16 @@ async fn main()
     .tool(ToolSubI64)
     .tool(ReadFile)
     .tool(WriteFile)
+    .tool(HttpRequest)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
     println!("Agent builded - {:?}", time_start.elapsed());
 
     let response: String = agent
-    .prompt("Write \"PY_ENV TEST PASSED\" to py_env_test.txt. 
-    Then read py_env_test.txt and return its contents twice.") //Запрос
+    .prompt("
+    Do GET request to https://deepcode.ci.nsu.ru/api/models and write result to get.txt
+    ") //Запрос
     .await
     .expect("Не отвечает");
 
