@@ -1,19 +1,21 @@
-
 use pyo3::prelude::*; //Для работы с PyO3
 use pyo3::types::PyModule; //Тип для модуля
 
 use std::{ffi::CString, str::FromStr}; //Спецстроки
 use std::collections::HashMap; //Таблица для хранения структур
+use std::sync::OnceLock; //Для получения глобального py_env
 
 use include_dir::{Dir, include_dir}; //Для сборка всей папки и её тип
+
+static PY_ENV: OnceLock<HashMap<String, PyFileModule>> = OnceLock::new(); //Ждёт своего часа
 
 static PY_TOOLS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py"); //Сбор всей папки
 
 #[derive(Debug)]
 pub struct PyFileModule //Структура с модулем и его функциями
 {
-    module: Py<PyModule>,
-    funcs: HashMap<String, Py<PyAny>>,
+    pub module: Py<PyModule>,
+    pub funcs: HashMap<String, Py<PyAny>>,
 }
 
 impl PyFileModule //Имплементация ей функции создания
@@ -95,8 +97,14 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
     return modules;
 }
 
-//Публичный вызов
-pub async fn load_py_env() -> HashMap<String, PyFileModule>
+//Создание пятницы
+pub async fn load_py_env()
 {
-    return collect_py_funcs_from_modules(collect_py_modules().await).await;
+    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules().await).await).expect("PyEnv уже инициализирован");
+}
+
+//Получение доступа
+pub async fn get_py_env() -> &'static HashMap<String, PyFileModule>
+{
+    return PY_ENV.get().expect("PyEnv не инициализирован");
 }
