@@ -168,6 +168,7 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 
 //Тест-зона
 use pyo3::prelude::*;
+use pyo3::types::PyFunction;
 
 #[rig_tool(description = "Write file.")]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
@@ -181,7 +182,7 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
 
-    let func: &Py<PyAny> = py_env.get("files").unwrap().funcs.get("write_file").unwrap();
+    let func = py_env.get("files").unwrap().funcs.get("write_file").unwrap();
 
     return Python::attach(|py: Python<'_>| -> PyResult<()>
     {
@@ -203,12 +204,16 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env().await;
 
-    let func: &Py<PyAny> = py_env.get("files").unwrap().funcs.get("read_file").unwrap();
+    let func: &Py<PyFunction> = py_env.get("files").unwrap().funcs.get("read_file").unwrap();
 
     return Python::attach(|py: Python<'_>| -> PyResult<String>
     {
-        return func.call1(py, (filename,))?.extract(py);
-    }).map_err(ToolExecutionError::from_error);
+        let func: &Bound<'_, PyFunction> = func.bind(py);
+        let result: Bound<'_, PyAny> = func.call1((filename,))?;
+
+        result.extract()
+    })
+    .map_err(ToolExecutionError::from_error);
 }
 
 /*
