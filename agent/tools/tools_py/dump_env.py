@@ -40,7 +40,7 @@ def dump_env() -> None:
     else:
         output["error"] = "Could not get the environment."
     
-    print(json.dumps(output, indent=4))
+    return json.dumps(output)
 
 if __name__ == "__main__":
     dump_env()
