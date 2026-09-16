@@ -98,7 +98,7 @@ async fn main()
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
-    .tool(EnvDump)
+    .tool(DumpEnv)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
@@ -106,21 +106,10 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Write local ENV to env.txt
+    None
     ") //Запрос
     .await
     .expect("Не отвечает");
 
     println!("{}\n{:?}", response, time_start.elapsed());
 }
-
-    /* //Подробный ответ от агента
-    use rig::agent::PromptResponse;
-    let response: PromptResponse = agent
-    .prompt("Sum two 32-bit integers of your choice. You must use the tool.")
-    .extended_details()
-    .await
-    .expect("Не отвечает");
-
-    println!("{:?}\n{:?}\n{:?}", response.content, response.usage, time_start.elapsed());
-    */
