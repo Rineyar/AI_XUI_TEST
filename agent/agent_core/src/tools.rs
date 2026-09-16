@@ -259,3 +259,16 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
         res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }
+
+#[rig_tool(description = "Env dump.")]
+pub async fn env_dump() -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool("env_dump", "env_dump", json!({ }), None::<()>, None).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
