@@ -1,3 +1,6 @@
+import os
+import json
+
 __all__ = ["dump_env"]
 
 __tool_meta__ = {
@@ -5,9 +8,6 @@ __tool_meta__ = {
         "description": "dump_env tool."
     }
 }
-
-import os
-import json
 
 # Можно будет расширить потом
 BLACK_LIST = ["PASSWORD", "TOKEN", "SECRET"]
@@ -28,19 +28,19 @@ def get_env() -> str:
 # Дампит переменные окружения в stdout как json
 def dump_env() -> None:
     output = {
-        "sucess" : False,
+        "success" : False,
         "output" : "",
         "error" : ""
     }
 
     dump = get_env()
     if dump:
-        output["sucess"] = True
+        output["success"] = True
         output["output"] = dump
     else:
         output["error"] = "Could not get the environment."
     
-    print(output)
+    print(json.dumps(output, indent=4))
 
 if __name__ == "__main__":
     dump_env()
