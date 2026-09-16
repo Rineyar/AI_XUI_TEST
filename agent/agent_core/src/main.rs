@@ -9,7 +9,6 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
-use std::collections::HashMap; //Хеш таблица для py_env
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -85,7 +84,7 @@ async fn main()
         }
     };
 
-    let _py_env: HashMap<String, PyFileModule> = load_py_env().await;
+    load_py_env().await; //Создание Py субботы
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -93,13 +92,13 @@ async fn main()
     .tool(ToolSumI64)
     .tool(ToolSubI64)
     .tool(ReadFile)
-    // .tool(WriteFile)
+    .tool(WriteFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
     let response: String = agent
-    .prompt("Write \"PYO3 TEST PASSED\" to pyo3_test.txt. 
-    Then read pyo3_test.txt and return its contents.") //Запрос
+    .prompt("Write \"PY_ENV TEST PASSED\" to py_env_test.txt. 
+    Then read py_env_test.txt and return its contents twice.") //Запрос
     .await
     .expect("Не отвечает");
 
