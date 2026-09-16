@@ -26,13 +26,13 @@ impl PyFileModule //Имплементация ей функции создан�
     }
 }
 
-async fn collect_py_modules() -> HashMap<String, PyFileModule> //Сбор модулей
+async fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileModule> //Сбор модулей
 {
     let mut modules: HashMap<String, PyFileModule> = HashMap::with_capacity(16);
 
     Python::attach(|py: Python<'_>| //Py среда
     {
-        for file in PY_TOOLS.files() //Все файлы
+        for file in directory.files() //Все файлы
         {
 
             if file.path().extension().unwrap_or_default() != "py" //Скип залётного
@@ -101,7 +101,7 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
 //Создание пятницы
 pub async fn load_py_env()
 {
-    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules().await).await).expect("PyEnv уже инициализирован");
+    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules(&PY_TOOLS).await).await).expect("PyEnv уже инициализирован");
 }
 
 //Получение доступа
