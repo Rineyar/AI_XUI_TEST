@@ -27,9 +27,9 @@ def make_post(url : str, data : dict | None = None):
         return None, f"POST failed: {e}"
 
 # Делает http запрос и выводит в stdout
-def make_request(url : str, req_type : str = "get", *,
+def make_request(*, url : str, req_type : str = "get",
                  post_data : dict | None = None, 
-                 get_params : dict | None = None) -> None:
+                 get_params : dict | None = None):
     output = {
         "success" : False,
         "output" : "",
