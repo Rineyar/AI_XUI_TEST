@@ -31,4 +31,4 @@ pub static MODEL_LOCAL_ID: &str = "openai/gpt-oss-20b";
 pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/api";
 
 //id дисписка
-pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4-Flash";
+pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4.1-Flash";
