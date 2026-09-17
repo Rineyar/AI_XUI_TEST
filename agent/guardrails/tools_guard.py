@@ -21,7 +21,7 @@ def _guard_write_file(args):
 def _guard_path_check(args):
     from pathlib import Path
 
-    WORKSPACE = Path("agent/workspace").resolve()
+    WORKSPACE = Path("../workspace").resolve()
 
     filename = args.get("filename")
 
