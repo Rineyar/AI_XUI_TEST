@@ -21,6 +21,8 @@ use tools::*;
 mod py_env; //Py среда
 use py_env::*;
 
+mod guards; //Гварды
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -88,7 +90,9 @@ async fn main()
 
     load_py_env().await; //Создание Py субботы
 
-    println!("PyEnv loaded - {:?}", time_start.elapsed());
+    load_py_guards().await; //Гварды
+
+    println!("PyEnv and PyGuards loaded - {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -106,7 +110,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    None
+    Try to write any file in /workspace and outside
     ") //Запрос
     .await
     .expect("Не отвечает");
