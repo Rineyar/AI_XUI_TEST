@@ -80,7 +80,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
-    print!("Tool {:?} called", request.function);
+    print!("Tool {:?} called with args: {:?}", request.function, request.args);
 
     let verdict: GuardResponse = tools_guard(&request).await; //Вызов гварда
 
@@ -128,6 +128,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         } else {
             func.call(py, (), Some(&kwargs))
         };
+
+        println!(" | called | time - {:?}", time.elapsed());
 
         return ret;
     }).map_err(ToolExecutionError::from_error);
