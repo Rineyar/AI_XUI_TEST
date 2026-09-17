@@ -1,6 +1,8 @@
 use rig::client::AgentClientExt; //.agent метод
 use rig::client::Client; //Тип данных для соединения
 use rig::completion::Prompt; //.prompt метод
+use rig::model::ModelList; //Тип листа моделей
+use rig::client::ModelListingClient; //Для сбора листа моделей
 use rig::prelude::Agent; //Тип данных для агента
 use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
@@ -22,6 +24,14 @@ mod py_env; //Py среда
 use py_env::*;
 
 mod guards; //Гварды
+
+fn print_model_list(models: ModelList)
+{
+    for (i, model) in models.data.iter().enumerate()
+    {
+        println!("№{}: {:?}", i + 1, model.id);
+    }
+}
 
 /*
 Обязательно сделать проверку tools call
@@ -77,13 +87,7 @@ async fn main()
             .build()
             .expect("Сборка разливного не удалась");
 
-            /*
-            use rig::client::ModelListingClient;
-
-            let models = model.list_models().await.expect("Не удалось получить список моделей");
-
-            println!("{:#?}\n{:?}", models, time_start.elapsed());
-            */
+            print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));          
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -95,14 +99,8 @@ async fn main()
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
             .build()
             .expect("Сборка разливного не удалась");
-
-            /*
-            use rig::client::ModelListingClient;
-
-            let models = model.list_models().await.expect("Не удалось получить список моделей");
-
-            println!("{:#?}\n{:?}", models, time_start.elapsed());
-            */
+            
+            print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));   
 
             model.agent("Qwen3.8-27B")   
         }
