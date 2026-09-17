@@ -30,6 +30,10 @@ def _guard_path_check(args):
 
     target = (WORKSPACE / filename).resolve()
 
+    print(f"[GUARD] workspace={WORKSPACE}")
+    print(f"[GUARD] filename={filename}")
+    print(f"[GUARD] target={target}")
+
     try:
         target.relative_to(WORKSPACE)
     except ValueError:
