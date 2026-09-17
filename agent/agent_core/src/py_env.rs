@@ -13,7 +13,7 @@ static PY_TOOLS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py")
 
 static PY_GUARDS: OnceLock<HashMap<String, PyFileModule>> = OnceLock::new();
 
-static PY_GUARDS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py");
+static PY_GUARDS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../guardrails");
 
 #[derive(Debug)]
 pub struct PyFileModule //Структура с модулем и его функциями
