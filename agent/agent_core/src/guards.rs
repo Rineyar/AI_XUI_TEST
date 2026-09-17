@@ -32,7 +32,7 @@ pub async fn tools_guard(request: &ToolRequest) -> GuardResponse
 {
     let guards: &HashMap<String, PyFileModule> = get_py_guards().await;
 
-    let guard: &Py<PyFunction> = match guards.get("tools_guard").expect("Гвард не найден").funcs.get(request.function)
+    let guard: &Py<PyFunction> = match guards.get("tools_guard").expect("Гвард не найден").funcs.get("guard_select")
     {
         Some(guard) => guard,
 
