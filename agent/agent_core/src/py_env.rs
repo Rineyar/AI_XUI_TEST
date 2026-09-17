@@ -9,7 +9,11 @@ use include_dir::{Dir, include_dir}; //Для сборка всей папки �
 
 static PY_ENV: OnceLock<HashMap<String, PyFileModule>> = OnceLock::new(); //Ждёт своего часа
 
-static PY_TOOLS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py"); //Сбор всей папки
+static PY_TOOLS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py"); //Сбор всей папки
+
+static PY_GUARDS: OnceLock<HashMap<String, PyFileModule>> = OnceLock::new();
+
+static PY_GUARDS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../tools/tools_py");
 
 #[derive(Debug)]
 pub struct PyFileModule //Структура с модулем и его функциями
@@ -101,11 +105,21 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
 //Создание пятницы
 pub async fn load_py_env()
 {
-    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules(&PY_TOOLS).await).await).expect("PyEnv уже инициализирован");
+    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules(&PY_TOOLS_DIR).await).await).expect("PyEnv уже инициализирован");
 }
 
 //Получение доступа
 pub async fn get_py_env() -> &'static HashMap<String, PyFileModule>
 {
     return PY_ENV.get().expect("PyEnv не инициализирован");
+}
+
+pub async fn load_py_guards()
+{
+    PY_GUARDS.set(collect_py_funcs_from_modules(collect_py_modules(&PY_GUARDS_DIR).await).await).expect("PyEnv уже инициализирован");
+}
+
+pub async fn get_py_guards() -> &'static HashMap<String, PyFileModule>
+{
+    return PY_GUARDS.get().expect("PyEnv не инициализирован");
 }
