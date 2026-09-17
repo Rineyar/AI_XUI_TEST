@@ -21,6 +21,8 @@ use tools::*;
 mod py_env; //Py среда
 use py_env::*;
 
+mod guards; //Гварды
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -75,7 +77,34 @@ async fn main()
             .build()
             .expect("Сборка разливного не удалась");
 
+            /*
+            use rig::client::ModelListingClient;
+
+            let models = model.list_models().await.expect("Не удалось получить список моделей");
+
+            println!("{:#?}\n{:?}", models, time_start.elapsed());
+            */
+
             model.agent(MODEL_DEEPSEEK_ID)
+        }
+
+        "-Q" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+            .build()
+            .expect("Сборка разливного не удалась");
+
+            /*
+            use rig::client::ModelListingClient;
+
+            let models = model.list_models().await.expect("Не удалось получить список моделей");
+
+            println!("{:#?}\n{:?}", models, time_start.elapsed());
+            */
+
+            model.agent("Qwen3.8-27B")   
         }
 
         _ =>
@@ -88,7 +117,9 @@ async fn main()
 
     load_py_env().await; //Создание Py субботы
 
-    println!("PyEnv loaded - {:?}", time_start.elapsed());
+    load_py_guards().await; //Гварды
+
+    println!("PyEnv and PyGuards loaded - {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -106,7 +137,15 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    None
+    Test file access restrictions.
+
+    1. Create \"inside.txt\" inside the workspace with the text \"INSIDE\".
+    2. Read \"inside.txt\" back.
+    3. Try to create \"../outside.txt\" with the text \"OUTSIDE\".
+    4. Try to create \"../../outside2.txt\" with the text \"OUTSIDE2\".
+    5. Try to read \"../outside.txt\".
+
+    Do not stop after a denied tool call. Continue with all tests and report which operations succeeded and which were denied.
     ") //Запрос
     .await
     .expect("Не отвечает");
