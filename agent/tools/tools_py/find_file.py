@@ -16,4 +16,5 @@ def find_files(*, pattern: str, path: str = ".") -> str:
     unique = sorted(set(matches))
     return "\n".join(unique) if unique else "(no matches)"
 
-print(find_files(pattern="t*"))
+if __name__ == "__main__":
+    print(find_files(pattern="t*"))
