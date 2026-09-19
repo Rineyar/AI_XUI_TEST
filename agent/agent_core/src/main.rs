@@ -37,6 +37,8 @@ fn print_model_list(models: ModelList)
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
 + динамическую обработку бы
+
+Потом мб хуки навесить
 */
 
 //Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
@@ -135,15 +137,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Test file access restrictions.
-
-    1. Create \"inside.txt\" inside the workspace with the text \"INSIDE\".
-    2. Read \"inside.txt\" back.
-    3. Try to create \"../outside.txt\" with the text \"OUTSIDE\".
-    4. Try to create \"../../outside2.txt\" with the text \"OUTSIDE2\".
-    5. Try to read \"../outside.txt\".
-
-    Do not stop after a denied tool call. Continue with all tests and report which operations succeeded and which were denied.
+    Made new py tool for yourself as your choice. Write name it new_tool.py.
     ") //Запрос
     .await
     .expect("Не отвечает");
