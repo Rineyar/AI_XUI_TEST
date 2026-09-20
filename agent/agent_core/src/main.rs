@@ -130,6 +130,8 @@ async fn main()
     .tool(WriteFile)
     .tool(HttpRequest)
     .tool(DumpEnv)
+    .tool(FindFiles)
+    .tool(DirectoryContents)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
@@ -137,7 +139,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Made new py tool for yourself as your choice. Write name it new_tool.py.
+    Test a new tools \"find_file\" and \"directory_contents\"
     ") //Запрос
     .await
     .expect("Не отвечает");
