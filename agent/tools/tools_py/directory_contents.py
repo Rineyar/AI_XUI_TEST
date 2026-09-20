@@ -1,4 +1,5 @@
 import os
+import json
 
 __all__ = ["directory_contents"]
 
@@ -17,4 +18,4 @@ def directory_contents(path):
             kind = "FILE"
         size = entry.stat().st_size
         contents.append({"kind":kind, "size":size, "name":entry.name})
-    return contents
+    return json.dumps(contents)
