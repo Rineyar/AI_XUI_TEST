@@ -37,6 +37,8 @@ fn print_model_list(models: ModelList)
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
 + динамическую обработку бы
+
+Потом мб хуки навесить
 */
 
 //Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
@@ -55,7 +57,7 @@ async fn main()
 
     if args_list.len() == 1
     {
-        panic!("Укажите модель через -L или -D!");
+        panic!("Укажите модель через -L, -D или -Q!");
     } else if args_list.len() > 2
     {
         println!("Обнаружены лишние аргументы:");
@@ -128,6 +130,8 @@ async fn main()
     .tool(WriteFile)
     .tool(HttpRequest)
     .tool(DumpEnv)
+    .tool(FindFiles)
+    .tool(DirectoryContents)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
@@ -135,15 +139,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Test file access restrictions.
-
-    1. Create \"inside.txt\" inside the workspace with the text \"INSIDE\".
-    2. Read \"inside.txt\" back.
-    3. Try to create \"../outside.txt\" with the text \"OUTSIDE\".
-    4. Try to create \"../../outside2.txt\" with the text \"OUTSIDE2\".
-    5. Try to read \"../outside.txt\".
-
-    Do not stop after a denied tool call. Continue with all tests and report which operations succeeded and which were denied.
+    Here must be tests. But i dont have guards
     ") //Запрос
     .await
     .expect("Не отвечает");

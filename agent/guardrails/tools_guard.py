@@ -10,6 +10,7 @@ def guard_select(request):
     elif function == "write_file":
         return _guard_write_file(args)
 
+
     return {"allowed": False, "reason": "Guard not covered this call"}
 
 def _guard_read_file(args):
@@ -18,6 +19,7 @@ def _guard_read_file(args):
 def _guard_write_file(args):
     return _guard_path_check(args)
 
+# Потом заменить принудительную замену пути на что-то более дельное
 def _guard_path_check(args):
     from pathlib import Path
 

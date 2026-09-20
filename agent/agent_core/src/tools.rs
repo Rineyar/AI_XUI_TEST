@@ -189,3 +189,37 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
         res.extract::<String>(py) //Принят return как String
     }).map_err(ToolExecutionError::from_error);
 }
+
+#[rig_tool(description = "Find files")]
+pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: json!(
+    { 
+        "pattern": pattern,
+        "path": path
+    }) }).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(description = "Directory contents.")]
+pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
+    args: json!(
+    { 
+        "path": path
+    }) }).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
