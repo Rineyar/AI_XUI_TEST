@@ -9,6 +9,10 @@ def guard_select(request):
 
     elif function == "write_file":
         return _guard_write_file(args)
+    elif function == "find_files":
+        return {"allowed": True, "reason": "Unsafe testing"}
+    elif function == "directory_contents":
+        return {"allowed": True, "reason": "Unsafe testing"}
 
     return {"allowed": False, "reason": "Guard not covered this call"}
 
