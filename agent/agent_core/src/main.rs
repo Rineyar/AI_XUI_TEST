@@ -57,7 +57,7 @@ async fn main()
 
     if args_list.len() == 1
     {
-        panic!("Укажите модель через -L или -D!");
+        panic!("Укажите модель через -L, -D или -Q!");
     } else if args_list.len() > 2
     {
         println!("Обнаружены лишние аргументы:");
@@ -139,7 +139,7 @@ async fn main()
 
     let response: String = agent
     .prompt("
-    Test a new tools \"find_file\" and \"directory_contents\"
+    Here must be tests. But i dont have guards
     ") //Запрос
     .await
     .expect("Не отвечает");
