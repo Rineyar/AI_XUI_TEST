@@ -211,7 +211,7 @@ pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExe
 pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
 {
     //Вызов
-    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "find_fildirectory_contentses",
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
     args: json!(
     { 
         "path": path
