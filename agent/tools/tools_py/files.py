@@ -1,4 +1,6 @@
-__all__ = ["read_file", "write_file"]
+import subprocess
+
+__all__ = ["read_file", "write_file", "run_file"]
 
 def read_file(*, filename):
 
@@ -24,3 +26,14 @@ def _resolve_workspace_path(filename):
     WORKSPACE = Path("../workspace").resolve()
 
     return (WORKSPACE / filename).resolve()
+
+def run_file(path, *args):
+    result = subprocess.run(
+        [path] + list(args),
+        capture_output=True,      
+        text=True,                
+        check=True,               
+    )
+
+    print(result.stdout)
+    print(result.stderr)
