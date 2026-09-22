@@ -36,9 +36,11 @@ async fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileM
 
     Python::attach(|py: Python<'_>| //Py среда
     {
-        for file in directory.files() //Все файлы
-        {
+        let sys: Bound<'_, PyModule> = PyModule::import(py, "sys").unwrap();
+        let sys_modules: Bound<'_, PyAny> = sys.getattr("modules").unwrap();
 
+        for file in directory.files()
+        {
             if file.path().extension().unwrap_or_default() != "py" //Скип залётного
             {
                 continue;
@@ -54,16 +56,36 @@ async fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileM
             }
 
             //Имя файла
-            let module_name: CString = CString::from_str(file.path().file_stem().expect("Отсутствует имя файла").to_str().expect("Ошибка перевода &OsStr в &str")).expect("Ошибка перевода &str (мб валидной) в CString");
+            let module_name: &str = file.path().file_stem().expect("Отсутствует имя файла").to_str().expect("Ошибка перевода &OsStr в &str");
 
-            //Собрать модуль
-            let module: Bound<'_, PyModule> = PyModule::from_code(py, &code,
-            &CString::from_str(file.path().file_name().expect("Отсутствует имя файла").to_str().expect("Ошибка перевода &OsStr в &str")).expect("Ошибка перевода &str (мб валидной) в CString"),
-            &module_name)
-            .expect("Ошибка сборки модуля");
+            let new_module: Bound<'_, PyModule> = PyModule::new(py, module_name).unwrap();
 
-            //Добавить модуль в таблицу по его имени
-            modules.insert(String::from_str(module_name.to_str().expect("Ошибка перевода &OsStr в &str")).expect("Ошибка перевода &str (мб валидной) в String"), PyFileModule::with_module(module.unbind()));
+            sys_modules.set_item(module_name, &new_module).unwrap();
+
+            modules.insert(module_name.to_string(), PyFileModule::with_module(new_module.unbind()));
+        }
+
+        for file in directory.files()
+        {
+            if file.path().extension().unwrap_or_default() != "py"
+            {
+                continue;
+            }
+
+            let code: CString = CString::from_str(file.contents_utf8().expect("Py файл не в UTF-8. Не порядок")).expect("Ошибка перевода &str (мб валидной) в CString");
+
+            if code.is_empty()
+            {
+                continue;
+            }
+
+            let module_name: &str = file.path().file_stem().expect("Отсутствует имя файла").to_str().expect("Ошибка перевода &OsStr в &str");
+
+            let module_elem: &PyFileModule = modules.get(module_name).expect("Модуль затерялся");
+
+            let module: &Bound<'_, PyModule> = module_elem.module.bind(py);
+
+            py.run(&code, Some(&module.dict()), Some(&module.dict())).expect("Ошибка выполнения Python модуля");
         }
     });
     
