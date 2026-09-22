@@ -30,7 +30,7 @@ impl PyFileModule //Имплементация ей функции создан�
     }
 }
 
-async fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileModule> //Сбор модулей
+fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileModule> //Сбор модулей
 {
     let mut modules: HashMap<String, PyFileModule> = HashMap::with_capacity(16);
 
@@ -92,7 +92,7 @@ async fn collect_py_modules(directory: &Dir<'static>) -> HashMap<String, PyFileM
     return modules;
 }
 
-async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule>) -> HashMap<String, PyFileModule>
+fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule>) -> HashMap<String, PyFileModule>
 {
     Python::attach(|py: Python<'_>| //Py четверг
     {
@@ -125,23 +125,23 @@ async fn collect_py_funcs_from_modules(mut modules: HashMap<String, PyFileModule
 }
 
 //Создание пятницы
-pub async fn load_py_env()
+pub fn load_py_env()
 {
-    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules(&PY_TOOLS_DIR).await).await).expect("PyEnv уже инициализирован");
+    PY_ENV.set(collect_py_funcs_from_modules(collect_py_modules(&PY_TOOLS_DIR))).expect("PyEnv уже инициализирован");
 }
 
 //Получение доступа
-pub async fn get_py_env() -> &'static HashMap<String, PyFileModule>
+pub fn get_py_env() -> &'static HashMap<String, PyFileModule>
 {
     return PY_ENV.get().expect("PyEnv не инициализирован");
 }
 
-pub async fn load_py_guards()
+pub fn load_py_guards()
 {
-    PY_GUARDS.set(collect_py_funcs_from_modules(collect_py_modules(&PY_GUARDS_DIR).await).await).expect("PyGuards уже инициализирован");
+    PY_GUARDS.set(collect_py_funcs_from_modules(collect_py_modules(&PY_GUARDS_DIR))).expect("PyGuards уже инициализирован");
 }
 
-pub async fn get_py_guards() -> &'static HashMap<String, PyFileModule>
+pub fn get_py_guards() -> &'static HashMap<String, PyFileModule>
 {
     return PY_GUARDS.get().expect("PyGuards не инициализирован");
 }
