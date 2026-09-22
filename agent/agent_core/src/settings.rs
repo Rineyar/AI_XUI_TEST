@@ -19,7 +19,7 @@ pub static FULL_PROMPT: &str = concat!(
 );
 
 //Максимум вывовов модели
-pub const MAX_LLM_CALLS: usize = 8;
+pub const MAX_LLM_CALLS: usize = 16;
 
 //Ссылка на модель на локалке
 pub static MODEL_LOCAL_URL: &str = "http://localhost:1234";
@@ -31,4 +31,4 @@ pub static MODEL_LOCAL_ID: &str = "openai/gpt-oss-20b";
 pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/api";
 
 //id дисписка
-pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4.1-Flash";
+pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4-Flash-0731";
