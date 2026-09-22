@@ -40,6 +40,8 @@ fn print_model_list(models: ModelList)
 + динамическую обработку бы
 
 Потом мб хуки навесить
+
+Возможно вывести отдельный поток на управление py вызовами
 */
 
 //docker compose build
@@ -51,7 +53,7 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    dotenv().ok(); //Чтобы он мон .env подсосать
+    dotenv().ok(); //Чтобы он мог .env подсосать
 
     let mut args_list: Vec<String> = args().collect();
 
@@ -115,9 +117,9 @@ async fn main()
 
     println!("Client loaded - {:?}", time_start.elapsed());
 
-    load_py_env().await; //Создание Py субботы
+    load_py_env(); //Создание Py субботы
 
-    load_py_guards().await; //Гварды
+    load_py_guards(); //Гварды
 
     println!("PyEnv and PyGuards loaded - {:?}", time_start.elapsed());
 
