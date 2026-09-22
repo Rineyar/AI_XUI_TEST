@@ -199,7 +199,7 @@ async fn main()
             }
         };
 
-        info!("{}\n{:?}", response, time_prompt.elapsed());
+        info!("\n{}\n{:?}", response, time_prompt.elapsed());
         println!("{}\n{:?}", response, time_prompt.elapsed());
 
         text_prompt.clear();

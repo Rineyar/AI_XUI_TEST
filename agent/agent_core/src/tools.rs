@@ -82,18 +82,18 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 {
     let time: Instant = Instant::now();
 
-    info!("Tool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    info!("\nTool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
 
     let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
-        warn!("Verdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        warn!("\nVerdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    info!("Verdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    info!("\nVerdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
@@ -107,7 +107,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
                 None =>
                 {
-                    error!("Missing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    error!("\nMissing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -116,7 +116,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
         None => 
         {
-            error!("Missing module - {:?}\t|\t{:?}", request.module, time.elapsed());
+            error!("\nMissing module - {:?}\t|\t{:?}", request.module, time.elapsed());
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
@@ -137,9 +137,9 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
             match ret
             {
-                Ok(_) => { info!("Called\t|\t{:?}", time.elapsed()); }
+                Ok(_) => { info!("\nCalled\t|\t{:?}", time.elapsed()); }
                 
-                Err(_) => { error!("Error returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
+                Err(_) => { error!("\nError returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
             }
 
             return ret;
