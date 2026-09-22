@@ -11,8 +11,12 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
+use std::io::stdin; //Для чтения строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
+
+use tracing_appender::{rolling::never, non_blocking};
+use tracing::{error, info, warn};
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -29,6 +33,7 @@ fn print_model_list(models: ModelList)
 {
     for (i, model) in models.data.iter().enumerate()
     {
+        info!("№{}: {:?}", i + 1, model.id);
         println!("№{}: {:?}", i + 1, model.id);
     }
 }
@@ -39,31 +44,42 @@ fn print_model_list(models: ModelList)
 + динамическую обработку бы
 
 Потом мб хуки навесить
+
+Возможно вывести отдельный поток на управление py вызовами
 */
 
-//Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
-//Если не может подсосать файлы, то $env:AGENT_ROOT = (Resolve-Path "..").Path
-
-//После docker compose build --no-cache
-//docker compose up --force-recreate
+//docker compose build
+//docker compose up -d
+//docker attach agent-core
+//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    dotenv().ok(); //Чтобы он мон .env подсосать
+    let (loger, _log_guard) = non_blocking(never("../logs", format!("log_{:?}.log", 
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("System time error").as_secs())));
+
+    tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
+
+    info!("Логер ожил: {:?}", time_start.elapsed());
+
+    dotenv().ok(); //Чтобы он мог .env подсосать
 
     let mut args_list: Vec<String> = args().collect();
 
     if args_list.len() == 1
     {
+        error!("Укажите модель через -L, -D или -Q!");
         panic!("Укажите модель через -L, -D или -Q!");
     } else if args_list.len() > 2
     {
+        warn!("Обнаружены лишние аргументы:");
         println!("Обнаружены лишние аргументы:");
 
         for elem in args_list.iter().skip(2)
         {
+            warn!("{:?}", elem);
             println!("{:?}", elem);
         }
     }
@@ -109,17 +125,18 @@ async fn main()
 
         _ =>
         {
+            error!("Некорректный выбор модели!");
             panic!("Некорректный выбор модели!");
         }
     };
 
-    println!("Client loaded - {:?}", time_start.elapsed());
+    info!("Клиент загружен: {:?}", time_start.elapsed());
 
-    load_py_env().await; //Создание Py субботы
+    load_py_env(); //Создание Py субботы
 
-    load_py_guards().await; //Гварды
+    load_py_guards(); //Гварды
 
-    println!("PyEnv and PyGuards loaded - {:?}", time_start.elapsed());
+    info!("PyEnv загружен: {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -135,14 +152,67 @@ async fn main()
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
-    println!("Agent builded - {:?}", time_start.elapsed());
+    info!("Агент готов: {:?}", time_start.elapsed());
 
-    let response: String = agent
-    .prompt("
-    Here must be tests. But i dont have guards
-    ") //Запрос
-    .await
-    .expect("Не отвечает");
+    let mut text_prompt: String = String::new();
 
-    println!("{}\n{:?}", response, time_start.elapsed());
+    if let Err(err) = stdin().read_line(&mut text_prompt)
+    {
+        error!("Запрос не считан!\n{:?}", err);
+        println!("Запрос не считан!\n{:?}", err);
+    }
+
+    while text_prompt.trim() != "exit"
+    {
+        let time_prompt: Instant = Instant::now();
+
+        if text_prompt.is_empty() || text_prompt.trim() == ""
+        {
+            warn!("Пустой запрос даст ошибку");
+            println!("Пустой запрос даст ошибку");
+
+            text_prompt.clear();
+
+            if let Err(err) = stdin().read_line(&mut text_prompt)
+            {
+                error!("Запрос не считан!\n{:?}", err);
+                println!("Запрос не считан!\n{:?}", err);
+
+                break;
+            }
+
+            continue;
+        }
+
+        let response: String = match agent.prompt(&text_prompt).await
+        {
+            Ok(response) =>
+            {
+                response
+            }
+
+            Err(err) =>
+            {
+                error!("Ошибка ответа!\n{:?}", err);
+
+                continue;
+            }
+        };
+
+        info!("\n{}\n{:?}", response, time_prompt.elapsed());
+        println!("{}\n{:?}", response, time_prompt.elapsed());
+
+        text_prompt.clear();
+
+        if let Err(err) = stdin().read_line(&mut text_prompt)
+        {
+            error!("Запрос не считан!\n{:?}", err);
+            println!("Запрос не считан!\n{:?}", err);
+
+            break;
+        }
+    }
+
+    info!("{:?}", time_start.elapsed());
+    println!("{:?}", time_start.elapsed());
 }

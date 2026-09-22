@@ -12,9 +12,13 @@ docker compose build
 После этого билды будут кешированными и повторные сборки будут занимать не более минуты.
 После поднимаем это чудо через:
 ```bash
-docker compose up
+docker compose up -d
 ```
-И оно оживёт. Пока что оно будет делать что-то, но работать будет.
+И оно оживёт. ~~Пока что оно будет делать что-то, но работать будет.~~ Чтобы с этим взаимодействовать пишем:
+```bash
+docker attach agent-core 
+```
+И можно работать. Чтобы выйти пишим exit. Чтобы выйти не закрывая контейнер Ctrl+P, Ctrl+Q.
 ## Для редактор(а/ов)
 ### API соглашения
 #### tools <-> guards
@@ -82,3 +86,38 @@ from other_file import some_func
 Есть **files.py** ну и пишите там всё что свяязано с файлами. Для других областей сделайте аналогично.
 #### tool <-> tool
 Актуальная моя просьба выше. А так же как работайте сами с собой *решайте сами*.
+### И дальше что
+А дальше то, что после того как ты ~~высрал~~ сделал новый тулз или по *русски* инструмент нужно описать его в tools.md
+Пример:
+***rand_tool.py***
+```python
+from random import randint
+from time import time
+import randint
+
+__all__ = ["get_rand_num"]
+
+def get_rand_num(*, left, right, seed = 0) -> int:
+    if seed == 0:
+        random.seed(time())
+    else:
+        random.seed(seed)
+    
+    return randint(left, right)
+```
+Вот ты это добавил в tools/tools_py  
+И теперь в tools.md добавляешь:
+```markdown
+## get_rand_num
+Returns random integer between left boundary and right.
+Callable with seed.
+
+Arguments:
+- `left` - left boundary
+- `text` - right boundary
+
+Supports:
+- `seed` - random seed
+```
+И если он используется где-то в работе, то стоило бы описать его использование в skills.  
+*Это уже ваше дело*.
