@@ -11,6 +11,7 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
+use std::io::stdin; //Для чтения строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -41,11 +42,10 @@ fn print_model_list(models: ModelList)
 Потом мб хуки навесить
 */
 
-//Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
-//Если не может подсосать файлы, то $env:AGENT_ROOT = (Resolve-Path "..").Path
-
-//После docker compose build --no-cache
-//docker compose up --force-recreate
+//docker compose build
+//docker compose up -d
+//docker attach agent-core
+//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -137,12 +137,37 @@ async fn main()
 
     println!("Agent builded - {:?}", time_start.elapsed());
 
-    let response: String = agent
-    .prompt("
-    Here must be tests. But i dont have guards
-    ") //Запрос
-    .await
-    .expect("Не отвечает");
+    let mut text_prompt: String = String::new();
 
-    println!("{}\n{:?}", response, time_start.elapsed());
+    if let Err(err) = stdin().read_line(&mut text_prompt)
+    {
+        println!("Line reading error!\n{:?}", err);
+    }
+
+    while text_prompt.trim() != "exit"
+    {
+        let time_prompt: Instant = Instant::now();
+
+        if text_prompt.is_empty() || text_prompt.trim() == ""
+        {
+            println!("Пустой запрос даст ошибку");
+            continue;
+        }
+
+        let response: String = agent
+        .prompt(&text_prompt) //Запрос
+        .await
+        .expect("Не отвечает");
+
+        println!("{}\n{:?}", response, time_prompt.elapsed());
+
+        text_prompt.clear();
+
+        if let Err(err) = stdin().read_line(&mut text_prompt)
+        {
+            println!("Line reading error!\n{:?}", err);
+        }
+    }
+
+    println!("{:?}", time_start.elapsed());
 }
