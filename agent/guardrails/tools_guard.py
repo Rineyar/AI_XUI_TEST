@@ -1,7 +1,8 @@
 import json
 import re
-from .path_guard import check_path
-from .policy import ALLOWED_TOOLS
+
+import path_guard
+import policy
 
 
 RISKS = {"critical", "high", "medium", "low", "info"}
@@ -19,13 +20,13 @@ def guard_select(request):
         function = request.get("function")
         args = request.get("args")
 
-        if function not in ALLOWED_TOOLS:
+        if function not in policy.ALLOWED_TOOLS:
             return _deny("Инструмент запрещён")
 
         if function == "read_file":
-            check_path(args.get("filename"))
+            path_guard.check_path(args.get("filename"))
         else:
-            check_path(args.get("path", "."), directory=True)
+            path_guard.check_path(args.get("path", "."), directory=True)
     except Exception as error:
         return _deny(str(error))
 
@@ -77,7 +78,7 @@ def _check_finding(finding):
         return "CWE должен иметь формат CWE-N"
 
     try:
-        source = check_path(finding["path"])
+        source = path_guard.check_path(finding["path"])
     except Exception as error:
         return f"некорректный путь: {error}"
 

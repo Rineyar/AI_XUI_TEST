@@ -1,5 +1,5 @@
 from pathlib import Path
-from .policy import WORKSPACE
+import policy
 
 
 def check_path(path, *, directory):
@@ -8,8 +8,8 @@ def check_path(path, *, directory):
         raise ValueError("Путь должен находиться внутри проекта")
 
     try:
-        target = (WORKSPACE / requested).resolve(strict=True)
-        target.relative_to(WORKSPACE)
+        target = (policy.WORKSPACE / requested).resolve(strict=True)
+        target.relative_to(policy.WORKSPACE)
     except Exception as error:
         raise ValueError("Путь не существует или выходит за пределы проекта") from error
 
