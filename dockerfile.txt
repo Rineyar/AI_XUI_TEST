@@ -36,6 +36,9 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 
+#Добавить необходимые библиотеки питону
+RUN pip install --no-cache-dir requests
+
 #Рабочая область
 WORKDIR /agent/agent_core
 
@@ -44,9 +47,6 @@ RUN mkdir -p /agent/workspace
 
 #Взять собранный под контейнер ELF
 COPY --from=builder /build/agent_core ./agent_core
-
-#Добавить необходимые библиотеки питону
-RUN pip install --no-cache-dir requests
 
 #Создание пользователя, выдача прав
 RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
