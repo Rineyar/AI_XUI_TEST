@@ -135,7 +135,14 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Write file.")]
+#[rig_tool(
+    name = "write_file",
+    description = "Write text to a file.",
+    params(
+        filename = "Path to the file relative",
+        text = "Text content to write to the file."
+    )
+)]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
     //Вызов
@@ -145,7 +152,13 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
     return Ok(());
 }
 
-#[rig_tool(description = "Read file.")]
+#[rig_tool(
+    name = "read_file",
+    description = "Read the contents of a text file from the workspace.",
+    params(
+        filename = "Path to the file relative to the workspace."
+    )
+)]
 pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -158,7 +171,16 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "HTTP request.")]
+#[rig_tool(
+    name = "http_request",
+    description = "Perform an HTTP or HTTPS GET or POST request.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        req_type = "Request method: get or post.",
+        post_data = "Optional request body for POST requests.",
+        get_params = "Optional query parameters for GET requests."
+    )
+)]
 pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -177,7 +199,10 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Dump env.")]
+#[rig_tool(
+    name = "dump_env",
+    description = "Return available environment variables."
+)]
 pub async fn dump_env() -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -190,7 +215,14 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Find files")]
+#[rig_tool(
+    name = "find_files",
+    description = "Recursively find files and directories in the workspace that match a glob pattern.",
+    params(
+        pattern = "Glob pattern to match file or directory names, for example '*.py' or 'config*'.",
+        path = "Directory to search from, relative to the workspace."
+    )
+)]
 pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -207,7 +239,13 @@ pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExe
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Directory contents.")]
+#[rig_tool(
+    name = "directory_contents",
+    description = "List files and directories contained directly in a workspace directory.",
+    params(
+        path = "Path to the directory relative to the workspace."
+    )
+)]
 pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
 {
     //Вызов
