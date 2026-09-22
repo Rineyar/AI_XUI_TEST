@@ -8,6 +8,8 @@ use serde_pyobject::to_pyobject;
 use std::time::Instant; //Для таймера
 use std::collections::HashMap; //Они кста тут живут  
 
+use tracing::{error, info, warn}; //Логи
+
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
 
@@ -79,16 +81,19 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
-    print!("Tool {:?} called with args: {:?}", request.function, request.args);
+
+    info!("Tool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
 
     let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
-        println!(" | guard blocked: {:?}| time - {:?}", verdict.reason, time.elapsed());
+        warn!("Verdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
+
+    info!("Verdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
@@ -102,7 +107,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
                 None =>
                 {
-                    println!(" | missing tool | time - {:?}", time.elapsed());
+                    error!("Missing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -111,7 +116,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
         None => 
         {
-            println!(" | missing module | time - {:?}", time.elapsed());
+            error!("Missing module - {:?}\t|\t{:?}", request.module, time.elapsed());
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
@@ -130,7 +135,12 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                 func.call(py, (), Some(&kwargs))
             };
 
-            println!(" | called | time - {:?}", time.elapsed());
+            match ret
+            {
+                Ok(_) => { info!("Called\t|\t{:?}", time.elapsed()); }
+                
+                Err(_) => { error!("Error returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
+            }
 
             return ret;
         }).map_err(ToolExecutionError::from_error);
