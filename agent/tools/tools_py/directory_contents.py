@@ -4,17 +4,18 @@ __all__ = ["directory_contents"]
 
 __tool_meta__ = {
     "directory_contents": {
-        "description": "'directory_contents' tool takes directory path and returns kinds, sizes and names of it's contents"
+        "description": "'directory_contents' принимает путь относительно папки agent, выводит тип, размер и имя содержимого"
     }
 }
 
 def directory_contents(path):
     contents = []
+    path = r"./agent/"+path
     for entry in os.scandir(path):
         if entry.is_dir():
             kind = "DIR "  
         else:
             kind = "FILE"
         size = entry.stat().st_size
-        contents.append({"kind":kind, "size":size, "name":entry.name})
+        print(kind, size, entry.name, "\n")
     return contents
