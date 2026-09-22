@@ -116,10 +116,10 @@ pub async fn get_py_env() -> &'static HashMap<String, PyFileModule>
 
 pub async fn load_py_guards()
 {
-    PY_GUARDS.set(collect_py_funcs_from_modules(collect_py_modules(&PY_GUARDS_DIR).await).await).expect("PyEnv уже инициализирован");
+    PY_GUARDS.set(collect_py_funcs_from_modules(collect_py_modules(&PY_GUARDS_DIR).await).await).expect("PyGuards уже инициализирован");
 }
 
 pub async fn get_py_guards() -> &'static HashMap<String, PyFileModule>
 {
-    return PY_GUARDS.get().expect("PyEnv не инициализирован");
+    return PY_GUARDS.get().expect("PyGuards не инициализирован");
 }
