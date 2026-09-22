@@ -82,7 +82,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     let time: Instant = Instant::now();
     print!("Tool {:?} called with args: {:?}", request.function, request.args);
 
-    let verdict: GuardResponse = tools_guard(&request).await; //Вызов гварда
+    let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
@@ -91,7 +91,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    let py_env: &HashMap<String, PyFileModule> = get_py_env().await; //Получить вторник
+    let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
     let func: &Py<PyFunction> = match py_env.get(request.module) //Функция
     {
@@ -118,21 +118,24 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         }
     };
 
-    return Python::attach(|py| -> PyResult<Py<PyAny>>
+    return tokio::task::spawn_blocking(move || -> Result<Py<PyAny>, ToolExecutionError>
     {
-        let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
-
-        let ret: Result<Py<PyAny>, PyErr> = if kwargs.is_empty()
+        return Python::attach(|py| -> PyResult<Py<PyAny>>
         {
-            func.call0(py)
-        } else {
-            func.call(py, (), Some(&kwargs))
-        };
+            let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
 
-        println!(" | called | time - {:?}", time.elapsed());
+            let ret: Result<Py<PyAny>, PyErr> = if kwargs.is_empty()
+            {
+                func.call0(py)
+            } else {
+                func.call(py, (), Some(&kwargs))
+            };
 
-        return ret;
-    }).map_err(ToolExecutionError::from_error);
+            println!(" | called | time - {:?}", time.elapsed());
+
+            return ret;
+        }).map_err(ToolExecutionError::from_error);
+    }).await.expect("Tool thread joining error");
 }
 
 #[rig_tool(
