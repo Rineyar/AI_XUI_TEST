@@ -86,7 +86,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
     if !verdict.allowed //Можно?
     {
-        println!(" | guard blocked | time - {:?}", time.elapsed());
+        println!(" | guard blocked: {:?}| time - {:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
