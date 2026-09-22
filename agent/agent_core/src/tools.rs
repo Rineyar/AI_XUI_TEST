@@ -1,20 +1,19 @@
 use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError;//Ошибка для тулза
+
 use serde::Serialize; //Сбор в json
-
-use serde_pyobject::to_pyobject; 
-use std::time::Instant;
-
 use serde_json::{Value, json}; //Json собранный
+use serde_pyobject::to_pyobject; 
+
+use std::time::Instant; //Для таймера
+use std::collections::HashMap; //Они кста тут живут  
 
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
-use std::collections::HashMap; //Они кста тут живут  
+use crate::guards::{GuardResponse, tools_guard}; //Гварды
 
 //Для PyEnv
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFunction};
-
-use crate::guards::{GuardResponse, tools_guard}; //Гварды
 
 #[derive(Serialize, Clone, Debug)]
 pub struct ToolRequest
