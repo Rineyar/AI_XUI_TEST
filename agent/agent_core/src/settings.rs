@@ -19,7 +19,7 @@ pub static FULL_PROMPT: &str = concat!(
 );
 
 //Максимум вывовов модели
-pub const MAX_LLM_CALLS: usize = 8;
+pub const MAX_LLM_CALLS: usize = 16;
 
 //Ссылка на модель на локалке
 pub static MODEL_LOCAL_URL: &str = "http://localhost:1234";
