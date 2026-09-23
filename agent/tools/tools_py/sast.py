@@ -2,11 +2,14 @@ import json
 from bandit.core import config as b_config
 from bandit.core import manager as b_manager
 
-__all__ = ["run_bandit"]
+__all__ = ["run_bandit", "run_semgrep"]
 
 __tool_meta__ = {
     "run_bandit": {
         "description": "run_bandit tool."
+    },
+    "run_semgrep": {
+        "description": "run_semgrep tool."
     }
 }
 
@@ -55,6 +58,18 @@ def run_bandit(*, targets: list = ["."],
 
     return json.dumps(output, indent=4)
 
+def run_semgrep(*, targets: list = ["."]) -> str:
+    """ Запустить Semgrep - инструмент 
+    для SAST анализа кода """
+    
+    output = {
+        "success" : False,
+        "output" : "",
+        "error" : ""
+    }
+
+    return json.dumps(output, indent=4)
     
 if __name__ == "__main__":
     print(run_bandit())
+    print(run_semgrep())
