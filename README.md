@@ -83,7 +83,7 @@ from other_file import some_func
 ```
 Просто не соберётся.
 Для внешних библиотек по типу ***requests*** использовать ***from import*** разрешено.  
-В dockerfile.txt необходимо добавить:
+В dockerfile.txt на примерно 40 строку необходимо добавить:
 ```dockerfile
 RUN pip install --no-cache-dir *ваша библиотека*
 ```
