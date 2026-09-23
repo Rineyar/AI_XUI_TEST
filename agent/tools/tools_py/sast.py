@@ -15,7 +15,7 @@ def run_bandit(*, targets: list = ["."],
                config_file: str | None = None, 
                agg_type: str = "vuln",
                sev_level: str = "LOW",
-               conf_level: str = "LOW"):
+               conf_level: str = "LOW") -> str:
     """ Запустить Bandit - инструмент 
     для SAST анализа Python кода """
 

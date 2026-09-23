@@ -29,7 +29,7 @@ def make_post(url : str, data : dict | None = None):
 # Делает http запрос и выводит в stdout
 def make_request(*, url : str, req_type : str = "get",
                  post_data : dict | None = None, 
-                 get_params : dict | None = None):
+                 get_params : dict | None = None) -> str:
     output = {
         "success" : False,
         "output" : "",
@@ -55,4 +55,4 @@ def make_request(*, url : str, req_type : str = "get",
     return json.dumps(output)
             
 if __name__ == "__main__":
-    make_request("https://ya.ru")
+    print(make_request(url="https://ya.ru"))

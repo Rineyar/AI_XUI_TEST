@@ -26,7 +26,7 @@ def get_env() -> str:
     return ""
 
 # Дампит переменные окружения в stdout как json
-def dump_env() -> None:
+def dump_env() -> str:
     output = {
         "success" : False,
         "output" : "",
@@ -40,7 +40,7 @@ def dump_env() -> None:
     else:
         output["error"] = "Could not get the environment."
     
-    return json.dumps(output)
+    return json.dumps(output, indent=4)
 
 if __name__ == "__main__":
-    dump_env()
+    print(dump_env())
