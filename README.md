@@ -121,3 +121,41 @@ Supports:
 ```
 И если он используется где-то в работе, то стоило бы описать его использование в skills.  
 *Это уже ваше дело*.
+#### Забыл дописать один важный момент
+Если вы эту херь собираетесь тестировать на модели. Нужно чтобы У неё был собственный гвард, иначе вызов будет недоступен. См. **tools <-> guards**.  
+Также требуется обёртка. Иначе как LLM узнает о том, что у него что-то есть?
+Пример обёртки для вышепоказанного инструмента:
+```rust
+#[rig_tool(
+    name = "get_rand_num",
+    description = "Returns random integer between left boundary and right.",
+    params(
+        left = "Left boundary of output.",
+        right = "Right boundary of output.",
+        seed = "Seed for seedable random."
+    )
+)]
+pub async fn get_rand_num(left: i32, right: i32, seed: Option<i32>) -> Result<i32, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "get_rand_num", function: "get_rand_num", args: json!(
+    { 
+        "left": left,
+        "right": right,
+        "seed": seed 
+    }) }).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<i32>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
+```
+Если сам не осилишь. Ну завайбкодь, чё.  
+После этого обёртку вставить в tools.rs. Он в agent/agent_core/src.  
+И в main.rs нужно после 141 строки поставить
+```rust
+.tool(GetRandNum)
+```
+Если вы не разобрались где конкретно, то лучше отчилсяйтесь.
