@@ -38,7 +38,7 @@ def make_request(*, url : str, req_type : str = "get",
 
     r = None 
     error = ""
-    match req_type:
+    match req_type.lower():
         case "get":
             r, error = make_get(url, get_params)
         case "post":
