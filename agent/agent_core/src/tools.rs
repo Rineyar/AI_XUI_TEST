@@ -2,7 +2,7 @@ use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError;//Ошибка для тулза
 
 use serde::Serialize; //Сбор в json
-use serde_json::{Value, json}; //Json собранный
+use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; 
 
 use std::time::Instant; //Для таймера
@@ -74,6 +74,16 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
         {
             return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
         }
+    }
+}
+
+fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
+where
+    T: Serialize
+{
+    if let Some(value) = value
+    {
+        args.insert(key.to_string(), json!(value));
     }
 }
 
@@ -271,63 +281,5 @@ pub async fn directory_contents(path: String) -> Result<String, ToolExecutionErr
     return Python::attach(|py: Python<'_>|
     {
         res.extract::<String>(py) //Принят return как String
-    }).map_err(ToolExecutionError::from_error);
-}
-
-#[rig_tool(
-    name = "run_bandit",
-    description = "Run Bandit - SAST tool for Python code security analysis. Returns issues and skipped files as JSON.",
-    params(
-        targets = "List of files/directories to analyze.",
-        recursive = "Whether to discover files recursively.",
-        config_file = "Optional Bandit config file path.",
-        agg_type = "Aggregation type: vuln, file or baseline.",
-        sev_level = "Severity level filter: LOW, MEDIUM, HIGH.",
-        conf_level = "Confidence level filter: LOW, MEDIUM, HIGH."
-    )
-)]
-pub async fn run_bandit(targets: Option<Vec<String>>, recursive: Option<bool>, config_file: Option<String>, agg_type: Option<String>, sev_level: Option<String>, conf_level: Option<String>) -> Result<String, ToolExecutionError>
-{
-    //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: json!(
-    { 
-        "targets": targets,
-        "recursive": recursive,
-        "config_file": config_file,
-        "agg_type": agg_type,
-        "sev_level": sev_level,
-        "conf_level": conf_level
-    }) }).await?;
-
-    //Сбор результата
-    return Python::attach(|py: Python<'_>|
-    {
-        res.extract::<String>(py)
-    }).map_err(ToolExecutionError::from_error);
-}
-
-#[rig_tool(
-    name = "run_semgrep",
-    description = "Run Semgrep - SAST tool for code analysis. Always adds p/security-audit and p/secrets configs.",
-    params(
-        targets = "List of targets for analysis.",
-        configs = "List of semgrep configs.",
-        timeout = "Per-file analysis timeout in seconds."
-    )
-)]
-pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<String>>, timeout: Option<i32>) -> Result<String, ToolExecutionError>
-{
-    //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: json!(
-    { 
-        "targets": targets,
-        "configs": configs,
-        "timeout": timeout
-    }) }).await?;
-
-    //Сбор результата
-    return Python::attach(|py: Python<'_>|
-    {
-        res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }
