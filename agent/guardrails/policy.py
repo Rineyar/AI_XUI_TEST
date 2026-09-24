@@ -11,5 +11,6 @@ ALLOWED_TOOLS = {
 
 TOOLS_IN_TEST = {
     "run_bandit",
-    "run_semgrep"
+    "run_semgrep",
+    "read_file"
 }
