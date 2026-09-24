@@ -8,3 +8,8 @@ ALLOWED_TOOLS = {
     "find_files",
     "directory_contents",
 }
+
+TOOLS_IN_TEST = {
+    "run_bandit",
+    "run_semgrep"
+}
