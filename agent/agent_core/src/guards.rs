@@ -29,9 +29,28 @@ pub struct GuardResponse
     pub reason: String,
 }
 
+//Чтобы вы долбаёбы мне ничего не положили
+fn core_guard(request: &ToolRequest) -> bool
+{
+    if request.function == "find_files" 
+    {
+        if request.args["path"] == ""
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 //Гвард проверяющий инструменты
 pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
 {
+    if !core_guard(&request)
+    {
+        return (GuardResponse { allowed: false, reason: String::from("Core Guard blocked: unsafe") }, request);
+    }
+
     //Спавн в блокирующий поток, чтобы не уйти в дедлок
     return tokio::task::spawn_blocking(move || -> (GuardResponse, ToolRequest)
     {
