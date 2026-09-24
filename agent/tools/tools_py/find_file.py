@@ -12,7 +12,6 @@ __tool_meta__ = {
 
 def find_files(*, pattern: str, path: str = ".") -> str:
     matches = glob.glob(f"{path}/**/{pattern}", recursive=True)
-    matches += glob.glob(f"{path}/{pattern}")
     unique = sorted(set(matches))
     return "\n".join(unique) if unique else "(no matches)"
 
