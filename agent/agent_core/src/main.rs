@@ -15,8 +15,8 @@ use std::io::stdin; //Для чтения строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
-use tracing_appender::{rolling::never, non_blocking};
-use tracing::{error, info, warn};
+use tracing_appender::{rolling::never, non_blocking}; //Логи
+use tracing::{error, info, warn}; //Макросы логирования
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -46,6 +46,9 @@ fn print_model_list(models: ModelList)
 Потом мб хуки навесить
 
 Возможно вывести отдельный поток на управление py вызовами
+
+Сделать проверку того, что в лог пихается. (прямо сейчас он запихал в лог весь бинарник, т.к. не смог его прочитать)
+Что-то похожее уже возникало раньше...
 */
 
 //docker compose build
@@ -92,7 +95,9 @@ async fn main()
     {
         "-L" =>
         {
-            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).expect("Локальня модель недоступна"); //Получение по ссылке
+            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).inspect_err(|err|
+            error!("Локальня модель недоступнаж {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Локальня модель недоступна"); //Получение по ссылке
 
             model.agent(MODEL_LOCAL_ID)
         }
@@ -100,9 +105,12 @@ async fn main()
         "-D" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
-            .build()
+            .build().inspect_err(|err|
+            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
             print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));          
@@ -113,12 +121,17 @@ async fn main()
         "-Q" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
-            .build()
+            .build().inspect_err(|err|
+            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
-            
-            print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));   
+
+            print_model_list(model.list_models().await.inspect_err(|err|
+            error!("Не удалось получить список моделей {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Не удалось получить список моделей"));   
 
             model.agent("Qwen3.8-27B")   
         }
