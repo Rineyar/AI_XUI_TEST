@@ -79,13 +79,14 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 }
 */
 
+//Вставляет арг, или ничего, чтобы пыхтун не умирал
 fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 where
     T: Serialize
 {
     if let Some(value) = value
     {
-        args.insert(key.to_string(), json!(value));
+        args.insert(String::from(key), json!(value));
     }
 }
 
@@ -247,14 +248,16 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
         path = "Directory to search from, relative to the workspace."
     )
 )]
-pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExecutionError>
+pub async fn find_files(pattern: String, path: Option<String>) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::new();
+
+    args.insert(String::from("pattern"), json!(pattern));
+
+    insert_option_arg(&mut args, "path", path);
+
     //Вызов
-    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: json!(
-    { 
-        "pattern": pattern,
-        "path": path
-    }) }).await?;
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
