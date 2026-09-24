@@ -102,4 +102,4 @@ def run_semgrep(*, targets: list = ["."],
     
 if __name__ == "__main__":
     # print(run_bandit())
-    print(run_semgrep())
+    print(run_semgrep(configs=["p/python", "p/rust"]))
