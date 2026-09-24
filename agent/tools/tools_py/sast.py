@@ -60,10 +60,14 @@ def run_bandit(*, targets: list = ["."],
     return json.dumps(output, indent=4)
 
 def run_semgrep(*, targets: list = ["."], 
-                configs: list = ["p/python", "p/rust"], 
+                configs: list = [], 
                 timeout: int = 5) -> str:
     """ Запустить Semgrep - инструмент 
-    для SAST анализа кода """
+    для SAST анализа кода.\n
+    targets - Список целей для анализа\n
+    configs - Список semgrep конфигов\n
+    timeout - Лимит времени выполнения одного файла\n
+    В configs всегда добавляются p/security-audit, p/secrets """
     
     output = {
         "success" : False,
@@ -75,6 +79,8 @@ def run_semgrep(*, targets: list = ["."],
         # создаем команду
         cmd = ["semgrep", "scan", "--json", "--quiet", 
                "--metrics=off", f"--timeout={timeout}"] 
+        # Добавляем конфиги в команду
+        configs += ["p/security-audit", "p/secrets"]
         for c in configs:
             cmd += ["--config", c]
 
