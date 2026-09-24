@@ -52,7 +52,7 @@ def make_request(*, url : str, req_type : str = "get",
     else:
         output["error"] = error
 
-    return json.dumps(output)
+    return json.dumps(output, indent=4, ensure_ascii=False)
             
 if __name__ == "__main__":
     print(make_request(url="https://ya.ru"))
