@@ -149,6 +149,8 @@ async fn main()
     .tool(DumpEnv)
     .tool(FindFiles)
     .tool(DirectoryContents)
+    .tool(RunBandit)
+    .tool(RunSemgrep)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 

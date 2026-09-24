@@ -32,7 +32,29 @@ Returns available environment variables with sensitive values filtered.
 Use when runtime environment information is relevant to the task.
 
 ## run_bandit
-WIP
+Runs Bandit - a SAST tool for analyzing Python code security.
+Discovers target files, runs Bandit tests, and returns discovered issues
+and skipped files serialized as a JSON string.
+
+Arguments:
+- `targets` - list of files/directories to analyze
+- `recursive` - whether to discover files recursively
+- `config_file` - optional Bandit config file path
+- `agg_type` - aggregation type: "vuln", "file", "baseline"
+- `sev_level` - severity level filter: "LOW", "MEDIUM", "HIGH"
+- `conf_level` - confidence level filter: "LOW", "MEDIUM", "HIGH"
+
+Supports:
+- Returns JSON string with fields `success`, `output` (`result`, `skipped`), `error`
 
 ## run_semgrep
-WIP
+Runs Semgrep - a SAST tool for code analysis.
+Always appends `p/security-audit` and `p/secrets` to the provided configs.
+
+Arguments:
+- `targets` - list of targets (files/dirs) to analyze
+- `configs` - list of semgrep configs
+- `timeout` - per-file analysis timeout in seconds
+
+Supports:
+- Returns JSON string with fields `success`, `output`, `error`
