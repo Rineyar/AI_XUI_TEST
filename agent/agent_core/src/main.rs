@@ -162,6 +162,82 @@ async fn main()
         println!("Запрос не считан!\n{:?}", err);
     }
 
+    match agent.prompt("
+    You need to analize sast.py.
+    Then answer by example:
+    ***rand_tool.py***
+    ```python
+    from random import randint
+    from time import time
+    import randint
+
+    __all__ = [\"get_rand_num\"]
+
+    def get_rand_num(*, left, right, seed = 0) -> int:
+        if seed == 0:
+            random.seed(time())
+        else:
+            random.seed(seed)
+        
+        return randint(left, right)
+    ```
+    That a tool function. And it need a .md and wrapped.
+    .md:
+    ```markdown
+    ## get_rand_num
+    Returns random integer between left boundary and right.
+    Callable with seed.
+
+    Arguments:
+    - `left` - left boundary
+    - `text` - right boundary
+
+    Supports:
+    - `seed` - random seed
+    ```
+    And wrapper:
+    ```rust
+    #[rig_tool(
+        name = \"get_rand_num\",
+        description = \"Returns random integer between left boundary and right.\",
+        params(
+            left = \"Left boundary of output.\",
+            right = \"Right boundary of output.\",
+            seed = \"Seed for seedable random.\"
+        )
+    )]
+    pub async fn get_rand_num(left: i32, right: i32, seed: Option<i32>) -> Result<i32, ToolExecutionError>
+    {
+        //Вызов
+        let res: Py<PyAny> = call_py_tool(ToolRequest { module: \"get_rand_num\", function: \"get_rand_num\", args: json!(
+        { 
+            \"left\": left,
+            \"right\": right,
+            \"seed\": seed 
+        }) }).await?;
+
+        //Сбор результата
+        return Python::attach(|py: Python<'_>|
+        {
+            res.extract::<i32>(py)
+        }).map_err(ToolExecutionError::from_error);
+    }
+    ```
+    You need to return a .md and wrapped to sast.py
+    ").await
+    {
+        Ok(response) =>
+        {
+            info!("\n{}\n", response);
+            println!("{:?}", response);
+        }
+
+        Err(err) =>
+        {
+            error!("Ошибка ответа!\n{:?}", err);
+        }
+    };
+
     while text_prompt.trim() != "exit"
     {
         let time_prompt: Instant = Instant::now();
