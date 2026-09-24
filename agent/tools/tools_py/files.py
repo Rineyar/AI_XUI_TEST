@@ -4,7 +4,8 @@ def read_file(*, filename):
 
     # path = _resolve_workspace_path(filename)
 
-    with open(filename, "r") as file:
+    #В будущем сделать errors="replace" и бинарное чтение. Всё 3 разные функции
+    with open(filename, "r", encoding="utf-8") as file:
         return file.read()
 
 def write_file(*, filename, text):
