@@ -283,3 +283,37 @@ pub async fn directory_contents(path: String) -> Result<String, ToolExecutionErr
         res.extract::<String>(py) //Принят return как String
     }).map_err(ToolExecutionError::from_error);
 }
+
+#[rig_tool(
+    name = "run_bandit",
+    description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        recursive = "Whether to recursively discover files in target directories. Optional; defaults to true.",
+        config_file = "Optional path to a Bandit configuration file, relative to the workspace.",
+        agg_type = "Issue aggregation type: vuln or file. Optional; defaults to vuln.",
+        sev_level = "Minimum issue severity to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW.",
+        conf_level = "Minimum issue confidence to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW."
+    )
+)]
+//Идите нахер со своей тонной option аргов господи питонисты хуевы
+pub async fn run_bandit(targets: Option<Vec<String>>, recursive: Option<bool>, 
+config_file: Option<String>, agg_type: Option<String>, sev_level: Option<String>,
+conf_level: Option<String>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "recursive", recursive);
+    insert_option_arg(&mut args, "config_file", config_file);
+    insert_option_arg(&mut args, "agg_type", agg_type);
+    insert_option_arg(&mut args, "sev_level", sev_level);
+    insert_option_arg(&mut args, "conf_level", conf_level);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
