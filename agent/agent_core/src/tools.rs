@@ -2,7 +2,7 @@ use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError;//Ошибка для тулза
 
 use serde::Serialize; //Сбор в json
-use serde_json::{Value, json}; //Json собранный
+use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; 
 
 use std::time::Instant; //Для таймера
@@ -25,6 +25,7 @@ pub struct ToolRequest
     pub args: Value
 }
 
+/*
 //Макрос для обёртки функции в инструмент
 #[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")]
 pub async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError> 
@@ -74,6 +75,17 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
         {
             return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
         }
+    }
+}
+*/
+
+fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
+where
+    T: Serialize
+{
+    if let Some(value) = value
+    {
+        args.insert(key.to_string(), json!(value));
     }
 }
 
@@ -271,5 +283,64 @@ pub async fn directory_contents(path: String) -> Result<String, ToolExecutionErr
     return Python::attach(|py: Python<'_>|
     {
         res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "run_bandit",
+    description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        recursive = "Whether to recursively discover files in target directories. Optional; defaults to true.",
+        config_file = "Optional path to a Bandit configuration file, relative to the workspace.",
+        agg_type = "Issue aggregation type: vuln or file. Optional; defaults to vuln.",
+        sev_level = "Minimum issue severity to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW.",
+        conf_level = "Minimum issue confidence to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW."
+    )
+)]
+//Идите нахер со своей тонной option аргов господи питонисты хуевы
+pub async fn run_bandit(targets: Option<Vec<String>>, recursive: Option<bool>, 
+config_file: Option<String>, agg_type: Option<String>, sev_level: Option<String>,
+conf_level: Option<String>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "recursive", recursive);
+    insert_option_arg(&mut args, "config_file", config_file);
+    insert_option_arg(&mut args, "agg_type", agg_type);
+    insert_option_arg(&mut args, "sev_level", sev_level);
+    insert_option_arg(&mut args, "conf_level", conf_level);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "run_semgrep",
+    description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        configs = "Additional Semgrep rulesets or configuration identifiers. Optional; p/security-audit and p/secrets are always included.",
+        timeout = "Per-file analysis timeout in seconds. Optional; defaults to 5 seconds."
+    )
+)]
+pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<String>>, timeout: Option<i32>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "configs", configs);
+    insert_option_arg(&mut args, "timeout", timeout);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }
