@@ -3,7 +3,7 @@ use serde_pyobject::{to_pyobject, from_pyobject}; //serde_json <-> py_dict
 
 use std::collections::HashMap; //Тип для py_env
 
-use tracing::{error, warn}; //Макросы логов
+use tracing::{error}; //Макросы логов
 
 use crate::py_env::{get_py_guards, PyFileModule}; //Взять гварды и тип к ним
 use crate::tools::ToolRequest; //Тип для запроса
@@ -48,6 +48,8 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
 {
     if !core_guard(&request)
     {
+
+
         return (GuardResponse { allowed: false, reason: String::from("Core Guard blocked: unsafe") }, request);
     }
 
@@ -65,8 +67,6 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
 
             None =>
             {
-                warn!("Guard not covered this call");
-
                 return (GuardResponse { allowed: false, reason: String::from("Guard not covered this call") }, request);
             }
         };
@@ -88,9 +88,7 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
         }
 
         Err(err) => 
-        {
-            warn!("Guard PyErr {:?}", err.to_string());
-            
+        {   
             return (GuardResponse { allowed: false, reason: err.to_string() }, request);
         }
     }; }).await.inspect_err(|err|
