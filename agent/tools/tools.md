@@ -30,3 +30,9 @@ Supports:
 ## dump_env
 Returns available environment variables with sensitive values filtered.
 Use when runtime environment information is relevant to the task.
+
+## run_bandit
+WIP
+
+## run_semgrep
+WIP
