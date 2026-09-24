@@ -37,7 +37,7 @@ ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 
 #Добавить необходимые библиотеки питону
-RUN pip install --no-cache-dir requests bandit
+RUN pip install --no-cache-dir requests bandit semgrep
 
 #Рабочая область
 WORKDIR /agent/agent_core
