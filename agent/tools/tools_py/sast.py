@@ -59,7 +59,7 @@ def run_bandit(*, targets: list = ["."],
 
     return json.dumps(output, indent=4)
 
-def run_semgrep(*, targets: list = ["."]) -> str:
+def run_semgrep(*, targets: list = ["."], configs: list = ["p/python"]) -> str:
     """ Запустить Semgrep - инструмент 
     для SAST анализа кода """
     
@@ -69,13 +69,23 @@ def run_semgrep(*, targets: list = ["."]) -> str:
         "error" : ""
     }
 
-    options = ["--json"]
+    try:
+        cmd = ["semgrep", "scan", "--json", "--quiet"] 
+        config = ["--config"] + configs
 
-    cmd = ["semgrep", "scan"] 
+        # Запускаем семгреп как процесс
+        semgrep_p = subprocess.run(cmd + config + targets,
+                                   capture_output=True,
+                                   text=True)
 
-    semgrep = subprocess.run(cmd + options + targets)
+        if semgrep_p.returncode > 1:
+            raise Exception(f"Semgrep exited with code: {semgrep_p.returncode}")
 
-    print(semgrep)
+        output["success"] = True
+        output["output"] = json.loads(semgrep_p.stdout)
+
+    except Exception as e:
+        output["error"] = f"Exception: {e}"
 
     return json.dumps(output, indent=4)
     
