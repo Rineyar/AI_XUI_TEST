@@ -1,4 +1,5 @@
 import json
+import subprocess
 from bandit.core import config as b_config
 from bandit.core import manager as b_manager
 
@@ -68,8 +69,16 @@ def run_semgrep(*, targets: list = ["."]) -> str:
         "error" : ""
     }
 
+    options = ["--json"]
+
+    cmd = ["semgrep", "scan"] 
+
+    semgrep = subprocess.run(cmd + options + targets)
+
+    print(semgrep)
+
     return json.dumps(output, indent=4)
     
 if __name__ == "__main__":
-    print(run_bandit())
+    # print(run_bandit())
     print(run_semgrep())
