@@ -317,3 +317,28 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
         res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }
+
+#[rig_tool(
+    name = "run_semgrep",
+    description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        configs = "Additional Semgrep rulesets or configuration identifiers. Optional; p/security-audit and p/secrets are always included.",
+        timeout = "Per-file analysis timeout in seconds. Optional; defaults to 5 seconds."
+    )
+)]
+pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<String>>, timeout: Option<i32>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "configs", configs);
+    insert_option_arg(&mut args, "timeout", timeout);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
