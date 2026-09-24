@@ -15,8 +15,8 @@ use std::io::stdin; //Для чтения строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
-use tracing_appender::{rolling::never, non_blocking};
-use tracing::{error, info, warn};
+use tracing_appender::{rolling::never, non_blocking}; //Логи
+use tracing::{error, info, warn}; //Макросы логирования
 
 mod settings; //Настройки ядра
 use settings::*;
