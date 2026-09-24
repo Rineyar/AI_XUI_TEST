@@ -4,16 +4,12 @@ def read_file(*, filename):
 
     # path = _resolve_workspace_path(filename)
 
-    print(f"[TOOL] actual path={filename}")
-
     with open(filename, "r") as file:
         return file.read()
 
 def write_file(*, filename, text):
 
     # path = _resolve_workspace_path(filename)
-
-    print(f"[TOOL] actual path={filename}")
 
     with open(filename, "w") as file:
         file.write(text)
