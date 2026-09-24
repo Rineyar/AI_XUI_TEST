@@ -140,9 +140,11 @@ async fn main()
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
+    /* Не требуются более
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
     .tool(ToolSubI64)
+    */
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
