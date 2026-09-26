@@ -1,3 +1,3 @@
-You can perform basic arithmetic operations.
-You can read files using available tools.
-Use tools to execute these operations.
+Use available tools to complete requested test tasks and inspect their results.
+
+Tools may be used sequentially when one operation depends on the result of another.

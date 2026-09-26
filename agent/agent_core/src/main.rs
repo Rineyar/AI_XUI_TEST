@@ -11,8 +11,12 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
+use std::io::stdin; //Для чтения строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
+
+use tracing_appender::{rolling::never, non_blocking}; //Логи
+use tracing::{error, info, warn}; //Макросы логирования
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -29,6 +33,7 @@ fn print_model_list(models: ModelList)
 {
     for (i, model) in models.data.iter().enumerate()
     {
+        info!("№{}: {:?}", i + 1, model.id);
         println!("№{}: {:?}", i + 1, model.id);
     }
 }
@@ -37,31 +42,47 @@ fn print_model_list(models: ModelList)
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
 + динамическую обработку бы
+
+Потом мб хуки навесить
+
+Возможно вывести отдельный поток на управление py вызовами
+
+Сделать проверку того, что в лог пихается. (прямо сейчас он запихал в лог весь бинарник, т.к. не смог его прочитать)
+Что-то похожее уже возникало раньше...
 */
 
-//Сборка по докер cross +stable build --release --target x86_64-unknown-linux-gnu
-//Если не может подсосать файлы, то $env:AGENT_ROOT = (Resolve-Path "..").Path
-
-//После docker compose build --no-cache
-//docker compose up --force-recreate
+//docker compose build
+//docker compose up -d
+//docker attach agent-core
+//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    dotenv().ok(); //Чтобы он мон .env подсосать
+    let (loger, _log_guard) = non_blocking(never("../logs", format!("log_{:?}.log", 
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("System time error").as_secs())));
+
+    tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
+
+    info!("Логер ожил: {:?}", time_start.elapsed());
+
+    dotenv().ok(); //Чтобы он мог .env подсосать
 
     let mut args_list: Vec<String> = args().collect();
 
     if args_list.len() == 1
     {
-        panic!("Укажите модель через -L или -D!");
+        error!("Укажите модель через -L, -D или -Q!");
+        panic!("Укажите модель через -L, -D или -Q!");
     } else if args_list.len() > 2
     {
+        warn!("Обнаружены лишние аргументы:");
         println!("Обнаружены лишние аргументы:");
 
         for elem in args_list.iter().skip(2)
         {
+            warn!("{:?}", elem);
             println!("{:?}", elem);
         }
     }
@@ -74,7 +95,9 @@ async fn main()
     {
         "-L" =>
         {
-            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).expect("Локальня модель недоступна"); //Получение по ссылке
+            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).inspect_err(|err|
+            error!("Локальня модель недоступнаж {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Локальня модель недоступна"); //Получение по ссылке
 
             model.agent(MODEL_LOCAL_ID)
         }
@@ -82,9 +105,12 @@ async fn main()
         "-D" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
-            .build()
+            .build().inspect_err(|err|
+            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
             print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));          
@@ -95,58 +121,115 @@ async fn main()
         "-Q" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").expect("Отсутствует API ключ")) //Передать ключ
+            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
-            .build()
+            .build().inspect_err(|err|
+            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
-            
-            print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));   
+
+            print_model_list(model.list_models().await.inspect_err(|err|
+            error!("Не удалось получить список моделей {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Не удалось получить список моделей"));   
 
             model.agent("Qwen3.8-27B")   
         }
 
         _ =>
         {
+            error!("Некорректный выбор модели!");
             panic!("Некорректный выбор модели!");
         }
     };
 
-    println!("Client loaded - {:?}", time_start.elapsed());
+    info!("Клиент загружен: {:?}", time_start.elapsed());
 
-    load_py_env().await; //Создание Py субботы
+    load_py_env(); //Создание Py субботы
 
-    load_py_guards().await; //Гварды
+    load_py_guards(); //Гварды
 
-    println!("PyEnv and PyGuards loaded - {:?}", time_start.elapsed());
+    info!("PyEnv загружен: {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
+    /* Не требуются более
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
     .tool(ToolSubI64)
+    */
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
     .tool(DumpEnv)
+    .tool(FindFiles)
+    .tool(DirectoryContents)
+    .tool(RunBandit)
+    .tool(RunSemgrep)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
-    println!("Agent builded - {:?}", time_start.elapsed());
+    info!("Агент готов: {:?}", time_start.elapsed());
 
-    let response: String = agent
-    .prompt("
-    Test file access restrictions.
+    let mut text_prompt: String = String::new();
 
-    1. Create \"inside.txt\" inside the workspace with the text \"INSIDE\".
-    2. Read \"inside.txt\" back.
-    3. Try to create \"../outside.txt\" with the text \"OUTSIDE\".
-    4. Try to create \"../../outside2.txt\" with the text \"OUTSIDE2\".
-    5. Try to read \"../outside.txt\".
+    if let Err(err) = stdin().read_line(&mut text_prompt)
+    {
+        error!("Запрос не считан!\n{:?}", err);
+        println!("Запрос не считан!\n{:?}", err);
+    }
 
-    Do not stop after a denied tool call. Continue with all tests and report which operations succeeded and which were denied.
-    ") //Запрос
-    .await
-    .expect("Не отвечает");
+    while text_prompt.trim() != "exit"
+    {
+        let time_prompt: Instant = Instant::now();
 
-    println!("{}\n{:?}", response, time_start.elapsed());
+        if text_prompt.is_empty() || text_prompt.trim() == ""
+        {
+            warn!("Пустой запрос даст ошибку");
+            println!("Пустой запрос даст ошибку");
+
+            text_prompt.clear();
+
+            if let Err(err) = stdin().read_line(&mut text_prompt)
+            {
+                error!("Запрос не считан!\n{:?}", err);
+                println!("Запрос не считан!\n{:?}", err);
+
+                break;
+            }
+
+            continue;
+        }
+
+        let response: String = match agent.prompt(&text_prompt).await
+        {
+            Ok(response) =>
+            {
+                response
+            }
+
+            Err(err) =>
+            {
+                error!("Ошибка ответа!\n{:?}", err);
+
+                continue;
+            }
+        };
+
+        info!("\n{}\n{:?}", response, time_prompt.elapsed());
+        println!("{}\n{:?}", response, time_prompt.elapsed());
+
+        text_prompt.clear();
+
+        if let Err(err) = stdin().read_line(&mut text_prompt)
+        {
+            error!("Запрос не считан!\n{:?}", err);
+            println!("Запрос не считан!\n{:?}", err);
+
+            break;
+        }
+    }
+
+    info!("{:?}", time_start.elapsed());
+    println!("{:?}", time_start.elapsed());
 }

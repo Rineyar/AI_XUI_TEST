@@ -1,11 +1,12 @@
 use serde::{Deserialize}; //Для сборки разборки struct<->json
+use serde_pyobject::{to_pyobject, from_pyobject}; //serde_json <-> py_dict
 
 use std::collections::HashMap; //Тип для py_env
 
+use tracing::{error}; //Макросы логов
+
 use crate::py_env::{get_py_guards, PyFileModule}; //Взять гварды и тип к ним
 use crate::tools::ToolRequest; //Тип для запроса
-
-use serde_pyobject::{to_pyobject, from_pyobject}; //serde_json <-> py_dict
 
 //Для PyEnv
 use pyo3::prelude::*;
@@ -28,41 +29,68 @@ pub struct GuardResponse
     pub reason: String,
 }
 
-//Гвард проверяющий инструменты
-pub async fn tools_guard(request: &ToolRequest) -> GuardResponse
+//Чтобы вы долбаёбы мне ничего не положили
+fn core_guard(request: &ToolRequest) -> bool
 {
-    let guards: &HashMap<String, PyFileModule> = get_py_guards().await; //Функции гвардов
-
-    //Выборочная
-    let guard: &Py<PyFunction> = match guards.get("tools_guard").expect("Гвард не найден").funcs.get("guard_select")
+    if request.function == "find_files" 
     {
-        Some(guard) => guard,
-
-        None =>
+        if request.args["path"] == ""
         {
-            return GuardResponse { allowed: false, reason: String::from("Guard not covered this call") };
+            return false;
         }
-    };
+    }
 
-    return match Python::attach(|py: Python<'_>| -> PyResult<GuardResponse>
+    return true;
+}
+
+//Гвард проверяющий инструменты
+pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
+{
+    if !core_guard(&request)
     {
-        let args: Bound<'_, PyAny> = to_pyobject(py, &request)?; //Арги
 
-        let ret: Py<PyAny> = guard.call1(py, (args,))?; //Вызов
 
-        let verdict: GuardResponse = from_pyobject(ret.into_bound(py)).map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()))?;
+        return (GuardResponse { allowed: false, reason: String::from("Core Guard blocked: unsafe") }, request);
+    }
 
-        return Ok(verdict);
-    })
+    //Спавн в блокирующий поток, чтобы не уйти в дедлок
+    return tokio::task::spawn_blocking(move || -> (GuardResponse, ToolRequest)
     {
+        let guards: &HashMap<String, PyFileModule> = get_py_guards(); //Функции гвардов
+
+        //Выборочная
+        let guard: &Py<PyFunction> = match guards.get("tools_guard").ok_or_else(||"Гвард не найден")
+        .inspect_err(|err|error!("{:?}", err))
+        .expect("Гвард не найден").funcs.get("guard_select")
+        {
+            Some(guard) => guard,
+
+            None =>
+            {
+                return (GuardResponse { allowed: false, reason: String::from("Guard not covered this call") }, request);
+            }
+        };
+
+        match Python::attach(|py: Python<'_>| -> PyResult<GuardResponse>
+        {
+            let args: Bound<'_, PyAny> = to_pyobject(py, &request)?; //Арги
+
+            let ret: Py<PyAny> = guard.call1(py, (args,))?; //Вызов
+
+            let verdict: PyResult<GuardResponse> = from_pyobject(ret.into_bound(py)).map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()));
+
+            return verdict;
+        })
+        {
         Ok(verdict) => 
         {
-            verdict
+            return (verdict, request);
         }
 
         Err(err) => 
-        {
-            GuardResponse { allowed: false, reason: err.to_string() }
+        {   
+            return (GuardResponse { allowed: false, reason: err.to_string() }, request);
         }
-    };
+    }; }).await.inspect_err(|err|
+    error!("Guard thread joining error {:?}", err)).expect("Guard thread joining error");
 }

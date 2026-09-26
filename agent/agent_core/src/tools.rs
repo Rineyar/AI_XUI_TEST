@@ -1,20 +1,21 @@
 use rig::{rig_tool}; //fn -> tool
 use rig::tool::ToolExecutionError;//Ошибка для тулза
+
 use serde::Serialize; //Сбор в json
-
+use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; 
-use std::time::Instant;
 
-use serde_json::{Value, json}; //Json собранный
+use std::time::Instant; //Для таймера
+use std::collections::HashMap; //Они кста тут живут  
+
+use tracing::{error, info, warn}; //Логи
 
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
-use std::collections::HashMap; //Они кста тут живут  
+use crate::guards::{GuardResponse, tools_guard}; //Гварды
 
 //Для PyEnv
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFunction};
-
-use crate::guards::{GuardResponse, tools_guard}; //Гварды
 
 #[derive(Serialize, Clone, Debug)]
 pub struct ToolRequest
@@ -24,6 +25,7 @@ pub struct ToolRequest
     pub args: Value
 }
 
+/*
 //Макрос для обёртки функции в инструмент
 #[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")]
 pub async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError> 
@@ -75,23 +77,37 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
         }
     }
 }
+*/
+
+fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
+where
+    T: Serialize
+{
+    if let Some(value) = value
+    {
+        args.insert(key.to_string(), json!(value));
+    }
+}
 
 //Обёртка вызовов
 async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
-    print!("Tool {:?} called with args: {:?}", request.function, request.args);
 
-    let verdict: GuardResponse = tools_guard(&request).await; //Вызов гварда
+    info!("\nTool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+
+    let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
-        println!(" | guard blocked | time - {:?}", time.elapsed());
+        warn!("\nVerdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    let py_env: &HashMap<String, PyFileModule> = get_py_env().await; //Получить вторник
+    info!("\nVerdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+
+    let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
     let func: &Py<PyFunction> = match py_env.get(request.module) //Функция
     {
@@ -103,7 +119,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
                 None =>
                 {
-                    println!(" | missing tool | time - {:?}", time.elapsed());
+                    error!("\nMissing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -112,30 +128,45 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
         None => 
         {
-            println!(" | missing module | time - {:?}", time.elapsed());
+            error!("\nMissing module - {:?}\t|\t{:?}", request.module, time.elapsed());
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
     };
 
-    return Python::attach(|py| -> PyResult<Py<PyAny>>
+    return tokio::task::spawn_blocking(move || -> Result<Py<PyAny>, ToolExecutionError>
     {
-        let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
-
-        let ret: Result<Py<PyAny>, PyErr> = if kwargs.is_empty()
+        return Python::attach(|py| -> PyResult<Py<PyAny>>
         {
-            func.call0(py)
-        } else {
-            func.call(py, (), Some(&kwargs))
-        };
+            let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
 
-        println!(" | called | time - {:?}", time.elapsed());
+            let ret: Result<Py<PyAny>, PyErr> = if kwargs.is_empty()
+            {
+                func.call0(py)
+            } else {
+                func.call(py, (), Some(&kwargs))
+            };
 
-        return ret;
-    }).map_err(ToolExecutionError::from_error);
+            match ret
+            {
+                Ok(_) => { info!("\nCalled\t|\t{:?}", time.elapsed()); }
+                
+                Err(_) => { error!("\nError returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
+            }
+
+            return ret;
+        }).map_err(ToolExecutionError::from_error);
+    }).await.expect("Tool thread joining error");
 }
 
-#[rig_tool(description = "Write file.")]
+#[rig_tool(
+    name = "write_file",
+    description = "Write text to a file.",
+    params(
+        filename = "Path to the file relative",
+        text = "Text content to write to the file."
+    )
+)]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
     //Вызов
@@ -145,7 +176,13 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
     return Ok(());
 }
 
-#[rig_tool(description = "Read file.")]
+#[rig_tool(
+    name = "read_file",
+    description = "Read the contents of a text file from the workspace.",
+    params(
+        filename = "Path to the file relative to the workspace."
+    )
+)]
 pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -158,7 +195,16 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "HTTP request.")]
+#[rig_tool(
+    name = "http_request",
+    description = "Perform an HTTP or HTTPS GET or POST request.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        req_type = "Request method: get or post.",
+        post_data = "Optional request body for POST requests.",
+        get_params = "Optional query parameters for GET requests."
+    )
+)]
 pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -177,7 +223,10 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
     }).map_err(ToolExecutionError::from_error);
 }
 
-#[rig_tool(description = "Dump env.")]
+#[rig_tool(
+    name = "dump_env",
+    description = "Return available environment variables."
+)]
 pub async fn dump_env() -> Result<String, ToolExecutionError>
 {
     //Вызов
@@ -187,5 +236,111 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
     return Python::attach(|py: Python<'_>|
     {
         res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "find_files",
+    description = "Recursively find files and directories in the workspace that match a glob pattern.",
+    params(
+        pattern = "Glob pattern to match file or directory names, for example '*.py' or 'config*'.",
+        path = "Directory to search from, relative to the workspace."
+    )
+)]
+pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: json!(
+    { 
+        "pattern": pattern,
+        "path": path
+    }) }).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "directory_contents",
+    description = "List files and directories contained directly in a workspace directory.",
+    params(
+        path = "Path to the directory relative to the workspace."
+    )
+)]
+pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
+{
+    //Вызов
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
+    args: json!(
+    { 
+        "path": path
+    }) }).await?;
+
+    //Сбор результата
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py) //Принят return как String
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "run_bandit",
+    description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        recursive = "Whether to recursively discover files in target directories. Optional; defaults to true.",
+        config_file = "Optional path to a Bandit configuration file, relative to the workspace.",
+        agg_type = "Issue aggregation type: vuln or file. Optional; defaults to vuln.",
+        sev_level = "Minimum issue severity to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW.",
+        conf_level = "Minimum issue confidence to report: LOW, MEDIUM, or HIGH. Optional; defaults to LOW."
+    )
+)]
+//Идите нахер со своей тонной option аргов господи питонисты хуевы
+pub async fn run_bandit(targets: Option<Vec<String>>, recursive: Option<bool>, 
+config_file: Option<String>, agg_type: Option<String>, sev_level: Option<String>,
+conf_level: Option<String>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "recursive", recursive);
+    insert_option_arg(&mut args, "config_file", config_file);
+    insert_option_arg(&mut args, "agg_type", agg_type);
+    insert_option_arg(&mut args, "sev_level", sev_level);
+    insert_option_arg(&mut args, "conf_level", conf_level);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "run_semgrep",
+    description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
+    params(
+        targets = "Files or directories to analyze. Optional; defaults to the workspace root.",
+        configs = "Additional Semgrep rulesets or configuration identifiers. Optional; p/security-audit and p/secrets are always included.",
+        timeout = "Per-file analysis timeout in seconds. Optional; defaults to 5 seconds."
+    )
+)]
+pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<String>>, timeout: Option<i32>) -> Result<String, ToolExecutionError>
+{
+    let mut args: Map<String, Value> = Map::new();
+
+    insert_option_arg(&mut args, "targets", targets);
+    insert_option_arg(&mut args, "configs", configs);
+    insert_option_arg(&mut args, "timeout", timeout);
+
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: Value::Object(args) }).await?;
+
+    return Python::attach(|py: Python<'_>|
+    {
+        res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }

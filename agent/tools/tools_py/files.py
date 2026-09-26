@@ -4,20 +4,17 @@ __all__ = ["read_file", "write_file", "run_file"]
 
 def read_file(*, filename):
 
-    path = _resolve_workspace_path(filename)
+    # path = _resolve_workspace_path(filename)
 
-    print(f"[TOOL] actual path={path}")
-
-    with open(path, "r") as file:
+    #В будущем сделать errors="replace" и бинарное чтение. Всё 3 разные функции
+    with open(filename, "r", encoding="utf-8") as file:
         return file.read()
 
 def write_file(*, filename, text):
 
-    path = _resolve_workspace_path(filename)
+    # path = _resolve_workspace_path(filename)
 
-    print(f"[TOOL] actual path={path}")
-
-    with open(path, "w") as file:
+    with open(filename, "w") as file:
         file.write(text)
 
 def _resolve_workspace_path(filename):
