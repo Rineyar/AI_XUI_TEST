@@ -143,13 +143,15 @@ Supports:
 )]
 pub async fn get_rand_num(left: i32, right: i32, seed: Option<i32>) -> Result<i32, ToolExecutionError>
 {
+    //Сбор аргов
+    let mut args: Map<String, Value> = Map::with_capacity(3);
+
+    insert_arg(&mut args, "left", Some(left)); //Обязательные в Some() оборачивать
+    insert_arg(&mut args, "right", Some(right)); 
+    insert_arg(&mut args, "seed", seed); //Необязательные уже Option
+
     //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "get_rand_num", function: "get_rand_num", args: json!(
-    { 
-        "left": left,
-        "right": right,
-        "seed": seed 
-    }) }).await?;
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "get_rand_num", function: "get_rand_num", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
