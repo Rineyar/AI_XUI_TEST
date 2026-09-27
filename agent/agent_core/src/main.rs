@@ -60,7 +60,7 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    let (loger, _log_guard) = non_blocking(never("../logs", format!("log_{:?}.log", 
+    let (loger, _log_guard) = non_blocking(never("./logs", format!("log_{:?}.log", 
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Времени нет").as_secs())));
 
     tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
