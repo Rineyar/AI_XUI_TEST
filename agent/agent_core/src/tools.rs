@@ -80,7 +80,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 */
 
 //Вставляет арг, или ничего, чтобы пыхтун не умирал
-fn insert_option_arg<T: Serialize>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
+fn insert_arg<T: Serialize>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 {
     if let Some(value) = value
     {
@@ -170,8 +170,8 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
 {
     let mut args: Map<String, Value> = Map::with_capacity(2);
 
-    insert_option_arg(&mut args, "filename", Some(filename));
-    insert_option_arg(&mut args, "text", Some(text));
+    insert_arg(&mut args, "filename", Some(filename));
+    insert_arg(&mut args, "text", Some(text));
 
     //Вызов
     call_py_tool(ToolRequest { module: "files", function: "write_file", args: Value::Object(args) }).await?;
@@ -191,7 +191,7 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
     let mut args: Map<String, Value> = Map::with_capacity(1);
 
-    insert_option_arg(&mut args, "filename", Some(filename));
+    insert_arg(&mut args, "filename", Some(filename));
     
     //Вызов
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "files", function: "read_file", args: Value::Object(args) }).await?;
@@ -217,10 +217,10 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
 {
     let mut args: Map<String, Value> = Map::with_capacity(4);
 
-    insert_option_arg(&mut args, "url", Some(url));
-    insert_option_arg(&mut args, "req_type", Some(req_type));
-    insert_option_arg(&mut args, "post_data", post_data);
-    insert_option_arg(&mut args, "get_params", get_params);
+    insert_arg(&mut args, "url", Some(url));
+    insert_arg(&mut args, "req_type", Some(req_type));
+    insert_arg(&mut args, "post_data", post_data);
+    insert_arg(&mut args, "get_params", get_params);
 
     //Вызов
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "http_request", function: "make_request", args: Value::Object(args) }).await?;
@@ -260,8 +260,8 @@ pub async fn find_files(pattern: String, path: Option<String>) -> Result<String,
 {
     let mut args: Map<String, Value> = Map::with_capacity(2);
 
-    insert_option_arg(&mut args, "pattern", Some(pattern));
-    insert_option_arg(&mut args, "path", path);
+    insert_arg(&mut args, "pattern", Some(pattern));
+    insert_arg(&mut args, "path", path);
 
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
@@ -282,9 +282,9 @@ pub async fn find_files(pattern: String, path: Option<String>) -> Result<String,
 )]
 pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
 {
-    let mut args: Map<String, Value> = Map::with_capacity(2);
+    let mut args: Map<String, Value> = Map::with_capacity(1);
 
-    insert_option_arg(&mut args, "path", Some(path));
+    insert_arg(&mut args, "path", Some(path));
 
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
@@ -316,12 +316,12 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
 {
     let mut args: Map<String, Value> = Map::new();
 
-    insert_option_arg(&mut args, "targets", targets);
-    insert_option_arg(&mut args, "recursive", recursive);
-    insert_option_arg(&mut args, "config_file", config_file);
-    insert_option_arg(&mut args, "agg_type", agg_type);
-    insert_option_arg(&mut args, "sev_level", sev_level);
-    insert_option_arg(&mut args, "conf_level", conf_level);
+    insert_arg(&mut args, "targets", targets);
+    insert_arg(&mut args, "recursive", recursive);
+    insert_arg(&mut args, "config_file", config_file);
+    insert_arg(&mut args, "agg_type", agg_type);
+    insert_arg(&mut args, "sev_level", sev_level);
+    insert_arg(&mut args, "conf_level", conf_level);
 
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: Value::Object(args) }).await?;
 
@@ -344,9 +344,9 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
 {
     let mut args: Map<String, Value> = Map::new();
 
-    insert_option_arg(&mut args, "targets", targets);
-    insert_option_arg(&mut args, "configs", configs);
-    insert_option_arg(&mut args, "timeout", timeout);
+    insert_arg(&mut args, "targets", targets);
+    insert_arg(&mut args, "configs", configs);
+    insert_arg(&mut args, "timeout", timeout);
 
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: Value::Object(args) }).await?;
 
