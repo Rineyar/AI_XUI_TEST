@@ -7,3 +7,4 @@ Cargo.lock
 */logs
 *.rar
 */workspace
+.idea
