@@ -93,18 +93,21 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 {
     let time: Instant = Instant::now();
 
-    info!("\nTool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    info!("\nИнструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    println!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
 
     let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
-        warn!("\nVerdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        println!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    info!("\nVerdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    info!("\nВердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    println!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
@@ -118,7 +121,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
                 None =>
                 {
-                    error!("\nMissing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    error!("\nИнструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    println!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -127,7 +131,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
         None => 
         {
-            error!("\nMissing module - {:?}\t|\t{:?}", request.module, time.elapsed());
+            error!("\nМодуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
+            println!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
@@ -148,14 +153,17 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
             match ret
             {
-                Ok(_) => { info!("\nCalled\t|\t{:?}", time.elapsed()); }
+                Ok(_) => { info!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); println!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); }
                 
-                Err(_) => { error!("\nError returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
+                Err(_) => { error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); println!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); }
             }
 
             return ret;
         }).map_err(ToolExecutionError::from_error);
-    }).await.expect("Tool thread joining error");
+    }).await.inspect_err(|err|
+    { error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed());
+    println!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()); 
+    }).expect("Ошибка присоединения потока исполения");
 }
 
 #[rig_tool(
@@ -280,11 +288,11 @@ pub async fn find_files(pattern: String, path: Option<String>) -> Result<String,
         path = "Path to the directory relative to the workspace."
     )
 )]
-pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
+pub async fn directory_contents(path: Option<String>) -> Result<String, ToolExecutionError>
 {
     let mut args: Map<String, Value> = Map::with_capacity(1);
 
-    insert_arg(&mut args, "path", Some(path));
+    insert_arg(&mut args, "path", path);
 
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",

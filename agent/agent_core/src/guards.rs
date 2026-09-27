@@ -48,8 +48,6 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
 {
     if !core_guard(&request)
     {
-
-
         return (GuardResponse { allowed: false, reason: String::from("Core Guard blocked: unsafe") }, request);
     }
 
@@ -92,5 +90,6 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
             return (GuardResponse { allowed: false, reason: err.to_string() }, request);
         }
     }; }).await.inspect_err(|err|
-    error!("Guard thread joining error {:?}", err)).expect("Guard thread joining error");
+    { error!("Ошибка присоединения потока гварда - {:?}", err); error!("Ошибка присоединения потока гварда - {:?}", err);
+    }).expect("Ошибка присоединения потока гварда");
 }

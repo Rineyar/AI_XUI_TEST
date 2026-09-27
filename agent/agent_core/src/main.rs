@@ -61,11 +61,12 @@ async fn main()
     let time_start: Instant = Instant::now();
 
     let (loger, _log_guard) = non_blocking(never("../logs", format!("log_{:?}.log", 
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("System time error").as_secs())));
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Времени нет").as_secs())));
 
     tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
 
     info!("Логер ожил: {:?}", time_start.elapsed());
+    println!("Логер ожил: {:?}", time_start.elapsed());
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
@@ -96,7 +97,7 @@ async fn main()
         "-L" =>
         {
             let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).inspect_err(|err|
-            error!("Локальня модель недоступнаж {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Локальня модель недоступна - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Локальня модель недоступна"); //Получение по ссылке
 
             model.agent(MODEL_LOCAL_ID)
@@ -106,14 +107,16 @@ async fn main()
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
             .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
-            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
             .build().inspect_err(|err|
-            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.expect("Не удалось получить список моделей"));          
+            print_model_list(model.list_models().await.inspect_err(|err| 
+            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Не удалось получить список моделей"));          
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -122,15 +125,15 @@ async fn main()
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
             .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
-            error!("Отсутствует API ключ {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует API ключ")) //Передать ключ
             .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
             .build().inspect_err(|err|
-            error!("Сборка разливного не удалась {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
             print_model_list(model.list_models().await.inspect_err(|err|
-            error!("Не удалось получить список моделей {:?}\t|\t{:?}", err, time_start.elapsed()))
+            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Не удалось получить список моделей"));   
 
             model.agent("Qwen3.8-27B")   
@@ -144,12 +147,14 @@ async fn main()
     };
 
     info!("Клиент загружен: {:?}", time_start.elapsed());
+    println!("Клиент загружен: {:?}", time_start.elapsed());
 
     load_py_env(); //Создание Py субботы
 
     load_py_guards(); //Гварды
 
     info!("PyEnv загружен: {:?}", time_start.elapsed());
+    println!("PyEnv загружен: {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
@@ -170,6 +175,7 @@ async fn main()
     .build(); //Builder -> Agent построить короче
 
     info!("Агент готов: {:?}", time_start.elapsed());
+    println!("Агент готов: {:?}", time_start.elapsed());
 
     let mut text_prompt: String = String::new();
 
@@ -211,6 +217,8 @@ async fn main()
             Err(err) =>
             {
                 error!("Ошибка ответа!\n{:?}", err);
+                
+                println!("Ошибка ответа!\n{:?}\n", err);
 
                 continue;
             }
