@@ -3,7 +3,7 @@ use rig::tool::ToolExecutionError;//Ошибка для тулза
 
 use serde::Serialize; //Сбор в json
 use serde_json::{Value, json, Map}; //Json собранный
-use serde_pyobject::to_pyobject; 
+use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
 use std::collections::HashMap; //Они кста тут живут  
@@ -80,9 +80,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 */
 
 //Вставляет арг, или ничего, чтобы пыхтун не умирал
-fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
-where
-    T: Serialize
+fn insert_option_arg<T: Serialize>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 {
     if let Some(value) = value
     {
@@ -137,7 +135,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
     return tokio::task::spawn_blocking(move || -> Result<Py<PyAny>, ToolExecutionError>
     {
-        return Python::attach(|py| -> PyResult<Py<PyAny>>
+        return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>>
         {
             let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
 
@@ -170,8 +168,13 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 )]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(2);
+
+    insert_option_arg(&mut args, "filename", Some(filename));
+    insert_option_arg(&mut args, "text", Some(text));
+
     //Вызов
-    call_py_tool(ToolRequest { module: "files", function: "write_file", args: json!({ "filename": filename, "text": text }) }).await?;
+    call_py_tool(ToolRequest { module: "files", function: "write_file", args: Value::Object(args) }).await?;
 
     //Сбора нет
     return Ok(());
@@ -186,8 +189,12 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
 )]
 pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(1);
+
+    insert_option_arg(&mut args, "filename", Some(filename));
+    
     //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "files", function: "read_file", args: json!({ "filename": filename }) }).await?;
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "files", function: "read_file", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
@@ -208,14 +215,15 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 )]
 pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(4);
+
+    insert_option_arg(&mut args, "url", Some(url));
+    insert_option_arg(&mut args, "req_type", Some(req_type));
+    insert_option_arg(&mut args, "post_data", post_data);
+    insert_option_arg(&mut args, "get_params", get_params);
+
     //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "http_request", function: "make_request", args: json!(
-    {
-        "url": url,
-        "req_type": req_type,
-        "post_data": post_data,
-        "get_params": get_params
-    }) }).await?;
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "http_request", function: "make_request", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>| -> PyResult<String>
@@ -250,10 +258,9 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
 )]
 pub async fn find_files(pattern: String, path: Option<String>) -> Result<String, ToolExecutionError>
 {
-    let mut args: Map<String, Value> = Map::new();
+    let mut args: Map<String, Value> = Map::with_capacity(2);
 
-    args.insert(String::from("pattern"), json!(pattern));
-
+    insert_option_arg(&mut args, "pattern", Some(pattern));
     insert_option_arg(&mut args, "path", path);
 
     //Вызов
@@ -275,12 +282,13 @@ pub async fn find_files(pattern: String, path: Option<String>) -> Result<String,
 )]
 pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(2);
+
+    insert_option_arg(&mut args, "path", Some(path));
+
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
-    args: json!(
-    { 
-        "path": path
-    }) }).await?;
+    args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
