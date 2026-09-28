@@ -153,9 +153,9 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
             match ret
             {
-                Ok(_) => { info!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); println!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); }
+                Ok(_) => { info!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); println!("Успешно выполнено\t|\t{:?}", time.elapsed()); }
                 
-                Err(_) => { error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); println!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); }
+                Err(_) => { error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); println!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); }
             }
 
             return ret;
