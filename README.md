@@ -18,7 +18,23 @@ docker compose up -d
 ```bash
 docker attach agent-core 
 ```
-И можно работать. Чтобы выйти пишим exit. Чтобы выйти не закрывая контейнер Ctrl+P, Ctrl+Q.
+И можно работать. Чтобы выйти пишим exit. Чтобы выйти не закрывая контейнер Ctrl+P, Ctrl+Q.  
+### !!!ВАЖНО!!!  
+Если вы уверены в своём докере, а вы уверены, и это факт. То в **dockerfile.txt** на ~20 строке расположены инструкции:
+```dockerfile
+#Собрать без сохранения
+##Обратная совместимость присутствует. Желательно закоментить это и раскоментить нормльную сборку
+RUN cargo build --release && cp target/release/agent_core /build/agent_core
+
+#Собрать со схранением
+# RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+#     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+#     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
+#     cargo build --release \
+#     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
+```
+Подсказка для совсем кабачков. Верхнюю сборку закоментить, нижнюю раскоментить.
+Для вас это должно быть первым делом, после git clone. А для ***некоторых*** это делать нельзя, иначе не запустит, и вообще он *может делать только pull и README*.
 ## Для редактор(а/ов)
 ### API соглашения
 #### tools <-> guards
