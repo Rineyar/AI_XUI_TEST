@@ -17,12 +17,16 @@ COPY agent/tools /build/agent/tools
 COPY agent/system_prompt.md /build/agent/system_prompt.md
 COPY agent/guardrails /build/agent/guardrails
 
+#Собрать без сохранения
+##Обратная совместимость присутствует. Желательно закоментить это и раскоментить нормльную сборку
+RUN cargo build --release && cp target/release/agent_core /build/agent_core
+
 #Собрать со схранением
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-    cargo build --release \
-    && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
+# RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+#     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+#     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
+#     cargo build --release \
+#     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
 #Запуск
 FROM python:3.13-slim-trixie
