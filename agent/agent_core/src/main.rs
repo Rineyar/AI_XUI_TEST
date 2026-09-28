@@ -64,6 +64,7 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
 //docker compose up -d
 //docker attach agent-core
 //Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
+//docker compose run --rm agent -L тест на локалке
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
