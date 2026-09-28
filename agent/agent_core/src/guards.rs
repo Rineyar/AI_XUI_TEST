@@ -32,12 +32,9 @@ pub struct GuardResponse
 //Чтобы вы долбаёбы мне ничего не положили
 fn core_guard(request: &ToolRequest) -> bool
 {
-    if request.function == "find_files" 
+    if request.function == "find_files" && request.args["path"] == ""
     {
-        if request.args["path"] == ""
-        {
-            return false;
-        }
+        return false;   
     }
 
     return true;
@@ -57,7 +54,7 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
         let guards: &HashMap<String, PyFileModule> = get_py_guards(); //Функции гвардов
 
         //Выборочная
-        let guard: &Py<PyFunction> = match guards.get("tools_guard").ok_or_else(||"Гвард не найден")
+        let guard: &Py<PyFunction> = match guards.get("tools_guard").ok_or("Гвард не найден")
         .inspect_err(|err|error!("{:?}", err))
         .expect("Гвард не найден").funcs.get("guard_select")
         {
