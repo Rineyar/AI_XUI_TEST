@@ -18,6 +18,8 @@ use dotenvy::dotenv; //Крейт для удобного чтения .env;
 use tracing_appender::{rolling::never, non_blocking}; //Логи
 use tracing::{error, info, warn}; //Макросы логирования
 
+use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
+
 mod settings; //Настройки ядра
 use settings::*;
 
@@ -114,9 +116,11 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err| 
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));          
+            print_model_list(timeout(Duration::from_secs(5), model.list_models()).await.inspect_err(|err|
+            error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
+            ).expect("Превышено время ожидания списка моделей").inspect_err(|err|
+            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
+            ).expect("Не удалось получить список моделей"));       
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -132,9 +136,11 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err|
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));   
+            print_model_list(timeout(Duration::from_secs(5), model.list_models()).await.inspect_err(|err|
+            error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
+            ).expect("Превышено время ожидания списка моделей").inspect_err(|err|
+            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
+            ).expect("Не удалось получить список моделей"));      
 
             model.agent("Qwen3.8-27B")   
         }
