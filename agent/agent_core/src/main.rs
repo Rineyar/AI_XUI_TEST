@@ -225,7 +225,7 @@ async fn main()
                 
                 println!("Ошибка ответа!\n{:?}\n", err);
 
-                continue;
+                break;
             }
         };
 
