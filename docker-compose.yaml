@@ -13,5 +13,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+    network_mode: host
+
     stdin_open: true
     tty: true
