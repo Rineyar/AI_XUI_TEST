@@ -1,5 +1,37 @@
 # AI_eX\`U\`I_TESTer
 ## Для пользователя
+### Самая база
+Для работы вам нужен `Docker` с `Buildx` / `BuildKit`  
+Проверить наличие оных можно при помощи:
+```bash
+docker --version
+```
+А также:
+```bash
+docker buildx version
+```
+Если докера или билдера нет, то его/их нужно скачать
+#### Если вы счастливый обладатель Windows
+Тут всё просто на самом деле.  
+По [ссылочке](https://docs.docker.com/desktop/setup/install/windows-install/) переходим и ставим. Потом после кастуем:
+```powershell
+docker --version
+docker buildx version
+docker compose version
+```
+Если чета не так, ну это реально не ко мне.
+#### Если вы ОЧЕНЬ счастливый пользователь Linux
+А конкретно Ubuntu и/или Debian. То тогда всё тоже ~~просто~~. Накатите себе докер **любой ценой**. А после немного магии:
+```bash
+sudo apt install docker-buildx-plugin
+```
+После этого проверка:
+```bash
+docker --version
+docker buildx version
+docker compose version
+```
+### Загрузка проекта
 Для начала скопируйте себе репозиторий.
 В корневой папке создайте **.env** файл с `DEEPSEEK_LOCAL_API_KEY`. Чему он должен быть равен должны знать сами. Для расширения списка поддерживаемых моделей не обращайтесь. Мне пофигу.  
 Для запуска проекта требуется в корневой папке открыть консоль.
@@ -19,22 +51,6 @@ docker compose up -d
 docker attach agent-core 
 ```
 И можно работать. Чтобы выйти пишим exit. Чтобы выйти не закрывая контейнер Ctrl+P, Ctrl+Q.  
-### !!!ВАЖНО!!!  
-Если вы уверены в своём докере, а вы уверены, и это факт. То в **dockerfile.txt** на ~20 строке расположены инструкции:
-```dockerfile
-#Собрать без сохранения
-##Обратная совместимость присутствует. Желательно закоментить это и раскоментить нормльную сборку
-RUN cargo build --release && cp target/release/agent_core /build/agent_core
-
-#Собрать со схранением
-# RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-#     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-#     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-#     cargo build --release \
-#     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
-```
-Подсказка для совсем кабачков. Верхнюю сборку закоментить, нижнюю раскоментить.
-Для вас это должно быть первым делом, после git clone. А для ***некоторых*** это делать нельзя, иначе не запустит, и вообще он *может делать только pull и README*.
 ## Для редактор(а/ов)
 ### API соглашения
 #### tools <-> guards
