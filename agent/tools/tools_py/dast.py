@@ -1,42 +1,41 @@
 import subprocess
 import json
-import os
-import time
 
-def run_nuclei(target: str, template_id: str = None, severity: str = "info,low,medium,high,critical"):
+__all__ = ["run_nuclei"]
 
-    command = [
-        "nuclei",
-        "-u", target,
-        "-severity", severity,
-        "-j"
-        #"-silent"  
-    ]
+'''
+target_url - url адрес цели. Допускается только http протокол
+template - Путь к шаблону из папки agent. Шаблон должен быть в формате .yaml. По умолчанию использует свои шаблоны. 
+severity - Важность искомых угроз. По умолчанию ищет все.
+'''
+def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,medium,high,critical"):
+    output = {
+            "success" : False,
+            "output" : "",
+            "error" : ""
+        }
+    command = ["nuclei", "-u", target_url, "-type", "http", "-max-host-error", "0", "-severity", severity, "-j", '-silent']
 
-    if template_id:
-        command.extend(["-id", template_id])
+    if template:
+        command.extend(["-t", r"./agent/"+template])
 
-    subprocess.run(command, text=True)
+    try:
+        nuclei = subprocess.run(command, capture_output=True, text=True)
+        output["output"] = []
+        for line in nuclei.stdout.strip().split('\n'):
+            if line:
+                try:
+                    output["output"].append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        output["success"] = True
+    except Exception as e:
+        output["error"] = f"Exception: {e}"
     
-    findings = []
-    # for line in result.stdout.strip().split("\n"):
-    #     if line:
-    #         try:
-    #             findings.append(json.loads(line))
-    #         except json.JSONDecodeError:
-    #             continue
-    return findings
+    return json.dumps(output, indent=4, ensure_ascii=False)
 
-LAB_PATH = "nuclei-templates-labs/http/cves/2024/CVE-2024-55416"
-TARGET_URL = "http://172.30.0.2:8000"
-TEMPLATE_FILE = "cve-2024-55416.yaml"
 
-subprocess.run(["docker-compose", "up", "-d"], cwd=LAB_PATH, check=True)
-time.sleep(5)
-template_path = os.path.join(LAB_PATH, TEMPLATE_FILE)
-
-findings = run_nuclei(TARGET_URL, template_id="cve-2024-55416")
-for f in findings:
-    print(f"[{f['info']['severity']}] {f['info']['name']} — {f['matched-at']}\n")
-
-subprocess.run(["docker-compose", "down"], cwd=LAB_PATH, check=True)
+if __name__ == "__main__":
+    TARGET_URL = "http://127.0.0.1:8080"
+    print(run_nuclei(TARGET_URL))
+    

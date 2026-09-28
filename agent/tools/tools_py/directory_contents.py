@@ -3,16 +3,14 @@ import json
 
 __all__ = ["directory_contents"]
 
-__tool_meta__ = {
-    "directory_contents": {
-        "description": "'directory_contents' принимает путь относительно папки agent, выводит тип, размер и имя содержимого"
-    }
-}
-
-def directory_contents(path):
+'''
+path - путь к директории относительно папки agent
+Функция возвращает тип, размер и имя содержимого
+'''
+def directory_contents(*, path):
     contents = []
-    path = r"./agent/"+path
-    for entry in os.scandir(path):
+    full_path = os.path.join("./agent", path)
+    for entry in os.scandir(full_path):
         if entry.is_dir():
             kind = "DIR "  
         else:
