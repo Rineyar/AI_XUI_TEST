@@ -3,7 +3,7 @@ use rig::tool::ToolExecutionError;//Ошибка для тулза
 
 use serde::Serialize; //Сбор в json
 use serde_json::{Value, json, Map}; //Json собранный
-use serde_pyobject::to_pyobject; 
+use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
 use std::collections::HashMap; //Они кста тут живут  
@@ -79,13 +79,12 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
 }
 */
 
-fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
-where
-    T: Serialize
+//Вставляет арг, или ничего, чтобы пыхтун не умирал
+fn insert_arg<T: Serialize>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 {
     if let Some(value) = value
     {
-        args.insert(key.to_string(), json!(value));
+        args.insert(String::from(key), json!(value));
     }
 }
 
@@ -94,18 +93,21 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 {
     let time: Instant = Instant::now();
 
-    info!("\nTool {:?} called with args: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    info!("\nИнструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    println!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
 
     let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
-        warn!("\nVerdict: guard blocked: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        println!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
-    info!("\nVerdict: allow: {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    info!("\nВердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    println!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
@@ -119,7 +121,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
                 None =>
                 {
-                    error!("\nMissing tool - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    error!("\nИнструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    println!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -128,7 +131,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
         None => 
         {
-            error!("\nMissing module - {:?}\t|\t{:?}", request.module, time.elapsed());
+            error!("\nМодуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
+            println!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
@@ -136,7 +140,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
     return tokio::task::spawn_blocking(move || -> Result<Py<PyAny>, ToolExecutionError>
     {
-        return Python::attach(|py| -> PyResult<Py<PyAny>>
+        return Python::attach(|py: Python<'_>| -> PyResult<Py<PyAny>>
         {
             let kwargs: Bound<'_, PyDict> = to_pyobject(py, &request.args)?.cast_into()?;
 
@@ -149,14 +153,17 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
             match ret
             {
-                Ok(_) => { info!("\nCalled\t|\t{:?}", time.elapsed()); }
+                Ok(_) => { info!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); println!("Успешно выполнено\t|\t{:?}", time.elapsed()); }
                 
-                Err(_) => { error!("\nError returned - {:?}\t|\t{:?}", ret, time.elapsed()); }
+                Err(_) => { error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); println!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); }
             }
 
             return ret;
         }).map_err(ToolExecutionError::from_error);
-    }).await.expect("Tool thread joining error");
+    }).await.inspect_err(|err|
+    { error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed());
+    println!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()); 
+    }).expect("Ошибка присоединения потока исполения");
 }
 
 #[rig_tool(
@@ -169,8 +176,13 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 )]
 pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(2);
+
+    insert_arg(&mut args, "filename", Some(filename));
+    insert_arg(&mut args, "text", Some(text));
+
     //Вызов
-    call_py_tool(ToolRequest { module: "files", function: "write_file", args: json!({ "filename": filename, "text": text }) }).await?;
+    call_py_tool(ToolRequest { module: "files", function: "write_file", args: Value::Object(args) }).await?;
 
     //Сбора нет
     return Ok(());
@@ -185,8 +197,12 @@ pub async fn write_file(filename: String, text: String) -> Result<(), ToolExecut
 )]
 pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(1);
+
+    insert_arg(&mut args, "filename", Some(filename));
+    
     //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "files", function: "read_file", args: json!({ "filename": filename }) }).await?;
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "files", function: "read_file", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
@@ -207,14 +223,15 @@ pub async fn read_file(filename: String) -> Result<String, ToolExecutionError>
 )]
 pub async fn http_request(url: String, req_type: String, post_data: Option<HashMap<String, String>>, get_params: Option<HashMap<String, String>>) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(4);
+
+    insert_arg(&mut args, "url", Some(url));
+    insert_arg(&mut args, "req_type", Some(req_type));
+    insert_arg(&mut args, "post_data", post_data);
+    insert_arg(&mut args, "get_params", get_params);
+
     //Вызов
-    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "http_request", function: "make_request", args: json!(
-    {
-        "url": url,
-        "req_type": req_type,
-        "post_data": post_data,
-        "get_params": get_params
-    }) }).await?;
+    let res: Py<PyAny> = call_py_tool(ToolRequest { module: "http_request", function: "make_request", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>| -> PyResult<String>
@@ -247,14 +264,15 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
         path = "Directory to search from, relative to the workspace."
     )
 )]
-pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExecutionError>
+pub async fn find_files(pattern: String, path: Option<String>) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(2);
+
+    insert_arg(&mut args, "pattern", Some(pattern));
+    insert_arg(&mut args, "path", path);
+
     //Вызов
-    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: json!(
-    { 
-        "pattern": pattern,
-        "path": path
-    }) }).await?;
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
@@ -270,14 +288,15 @@ pub async fn find_files(pattern: String, path: String) -> Result<String, ToolExe
         path = "Path to the directory relative to the workspace."
     )
 )]
-pub async fn directory_contents(path: String) -> Result<String, ToolExecutionError>
+pub async fn directory_contents(path: Option<String>) -> Result<String, ToolExecutionError>
 {
+    let mut args: Map<String, Value> = Map::with_capacity(1);
+
+    insert_arg(&mut args, "path", path);
+
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "directory_contents", function: "directory_contents",
-    args: json!(
-    { 
-        "path": path
-    }) }).await?;
+    args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
@@ -305,12 +324,12 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
 {
     let mut args: Map<String, Value> = Map::new();
 
-    insert_option_arg(&mut args, "targets", targets);
-    insert_option_arg(&mut args, "recursive", recursive);
-    insert_option_arg(&mut args, "config_file", config_file);
-    insert_option_arg(&mut args, "agg_type", agg_type);
-    insert_option_arg(&mut args, "sev_level", sev_level);
-    insert_option_arg(&mut args, "conf_level", conf_level);
+    insert_arg(&mut args, "targets", targets);
+    insert_arg(&mut args, "recursive", recursive);
+    insert_arg(&mut args, "config_file", config_file);
+    insert_arg(&mut args, "agg_type", agg_type);
+    insert_arg(&mut args, "sev_level", sev_level);
+    insert_arg(&mut args, "conf_level", conf_level);
 
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_bandit", args: Value::Object(args) }).await?;
 
@@ -333,9 +352,9 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
 {
     let mut args: Map<String, Value> = Map::new();
 
-    insert_option_arg(&mut args, "targets", targets);
-    insert_option_arg(&mut args, "configs", configs);
-    insert_option_arg(&mut args, "timeout", timeout);
+    insert_arg(&mut args, "targets", targets);
+    insert_arg(&mut args, "configs", configs);
+    insert_arg(&mut args, "timeout", timeout);
 
     let res: Py<PyAny> = call_py_tool(ToolRequest { module: "sast", function: "run_semgrep", args: Value::Object(args) }).await?;
 

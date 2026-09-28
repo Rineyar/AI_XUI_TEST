@@ -32,12 +32,9 @@ pub struct GuardResponse
 //Чтобы вы долбаёбы мне ничего не положили
 fn core_guard(request: &ToolRequest) -> bool
 {
-    if request.function == "find_files" 
+    if request.function == "find_files" && request.args["path"] == ""
     {
-        if request.args["path"] == ""
-        {
-            return false;
-        }
+        return false;   
     }
 
     return true;
@@ -48,8 +45,6 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
 {
     if !core_guard(&request)
     {
-
-
         return (GuardResponse { allowed: false, reason: String::from("Core Guard blocked: unsafe") }, request);
     }
 
@@ -59,7 +54,7 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
         let guards: &HashMap<String, PyFileModule> = get_py_guards(); //Функции гвардов
 
         //Выборочная
-        let guard: &Py<PyFunction> = match guards.get("tools_guard").ok_or_else(||"Гвард не найден")
+        let guard: &Py<PyFunction> = match guards.get("tools_guard").ok_or("Гвард не найден")
         .inspect_err(|err|error!("{:?}", err))
         .expect("Гвард не найден").funcs.get("guard_select")
         {
@@ -92,5 +87,6 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
             return (GuardResponse { allowed: false, reason: err.to_string() }, request);
         }
     }; }).await.inspect_err(|err|
-    error!("Guard thread joining error {:?}", err)).expect("Guard thread joining error");
+    { error!("Ошибка присоединения потока гварда - {:?}", err); error!("Ошибка присоединения потока гварда - {:?}", err);
+    }).expect("Ошибка присоединения потока гварда");
 }

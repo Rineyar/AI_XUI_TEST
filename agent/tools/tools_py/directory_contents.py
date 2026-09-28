@@ -7,7 +7,7 @@ __all__ = ["directory_contents"]
 path - путь к директории относительно папки agent
 Функция возвращает тип, размер и имя содержимого
 '''
-def directory_contents(*, path):
+def directory_contents(*, path = "."):
     contents = []
     full_path = os.path.join("./agent", path)
     for entry in os.scandir(full_path):
