@@ -8,7 +8,7 @@ def check_path(path, *, directory=None):
         raise ValueError("Путь должен находиться внутри проекта")
 
     try:
-        target = (policy.WORKSPACE / requested).resolve(strict=True)
+        target = (policy.ROOT / requested).resolve(strict=True)
         target.relative_to(policy.WORKSPACE)
     except Exception as error:
         raise ValueError("Путь не существует или выходит за пределы проекта") from error
@@ -29,7 +29,7 @@ def check_write_path(path):
         raise ValueError("Путь должен находиться внутри проекта")
 
     try:
-        target = (policy.WORKSPACE / requested).resolve(strict=False)
+        target = (policy.ROOT / requested).resolve(strict=False)
         target.relative_to(policy.WORKSPACE)
         parent = target.parent.resolve(strict=True)
         parent.relative_to(policy.WORKSPACE)

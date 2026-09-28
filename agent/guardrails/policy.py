@@ -1,7 +1,9 @@
 from pathlib import Path
 
 
-WORKSPACE = Path("./workspace").resolve()
+ROOT = Path(".").resolve()
+WORKSPACE = (ROOT / "workspace").resolve()
+
 MAX_FILE_SIZE = 1000000
 
 ALLOWED_TOOLS = {
