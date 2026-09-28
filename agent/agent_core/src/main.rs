@@ -31,8 +31,15 @@ use py_env::*;
 
 mod guards; //Гварды
 
-fn print_model_list(models: ModelList)
+async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
 {
+    let models: ModelList = timeout(Duration::from_secs(5), model.list_models())
+    .await.inspect_err(|err|
+    error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Превышено время ожидания списка моделей").inspect_err(|err|
+    error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Не удалось получить список моделей");
+
     for (i, model) in models.data.iter().enumerate()
     {
         info!("№{}: {:?}", i + 1, model.id);
@@ -116,11 +123,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(timeout(Duration::from_secs(5), model.list_models()).await.inspect_err(|err|
-            error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
-            ).expect("Превышено время ожидания списка моделей").inspect_err(|err|
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
-            ).expect("Не удалось получить список моделей"));       
+            print_model_list(&model, &time_start).await;
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -136,11 +139,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(timeout(Duration::from_secs(5), model.list_models()).await.inspect_err(|err|
-            error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
-            ).expect("Превышено время ожидания списка моделей").inspect_err(|err|
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed())
-            ).expect("Не удалось получить список моделей"));      
+            print_model_list(&model, &time_start).await;
 
             model.agent("Qwen3.8-27B")   
         }
