@@ -9,7 +9,7 @@ __tool_meta__ = {
     }
 }
 
-def directory_contents(path):
+def directory_contents(*, path = "."):
     contents = []
     for entry in os.scandir(path):
         if entry.is_dir():

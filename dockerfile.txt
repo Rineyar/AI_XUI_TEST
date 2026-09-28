@@ -39,16 +39,17 @@ ENV LC_ALL=C.UTF-8
 RUN pip install --no-cache-dir requests bandit semgrep
 
 #Рабочая область
-WORKDIR /agent/agent_core
+WORKDIR /agent
 
 #Изолятор
 RUN mkdir -p /agent/workspace
 
+#Его файлы на тест
 COPY agent/agent_core/src /agent/workspace/agent_core
 COPY agent/tools /agent/workspace/tools
 
 #Взять собранный под контейнер ELF
-COPY --from=builder /build/agent_core ./agent_core
+COPY --from=builder /build/agent_core /agent/agent_core/agent_core
 
 #Создание пользователя, выдача прав
 RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
@@ -59,4 +60,4 @@ RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 ag
 USER agent
 
 #Запуск
-ENTRYPOINT ["./agent_core", "-D"]
+ENTRYPOINT ["./agent_core/agent_core", "-D"]
