@@ -64,4 +64,5 @@ RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 ag
 USER agent
 
 #Запуск
-ENTRYPOINT ["./agent_core/agent_core", "-D"]
+ENTRYPOINT ["./agent_core/agent_core"]
+CMD ["-D"]
