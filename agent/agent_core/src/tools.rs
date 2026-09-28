@@ -240,12 +240,14 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
     }).map_err(ToolExecutionError::from_error);
 }
 
+/*
 #[rig_tool(
     name = "dump_env",
     description = "Return available environment variables."
 )]
 pub async fn dump_env() -> Result<String, ToolExecutionError>
 {
+    todo!("Фикс требуется.");
     //Вызов
     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "dump_env", function: "dump_env", args: json!({ }) }).await?;
 
@@ -255,6 +257,7 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
         res.extract::<String>(py) //Принят return как String
     }).map_err(ToolExecutionError::from_error);
 }
+*/
 
 #[rig_tool(
     name = "find_files",
