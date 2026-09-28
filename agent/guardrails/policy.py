@@ -10,7 +10,7 @@ ALLOWED_TOOLS = {
     "read_file",
     "write_file",
     "make_request",
-    "dump_env",
+    # "dump_env",
     "find_files",
     "directory_contents",
     "run_bandit",

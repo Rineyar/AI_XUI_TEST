@@ -22,7 +22,7 @@ TOOL_GUARDS = {
     "read_file": lambda args: _guard_read_file(args),
     "write_file": lambda args: _guard_write_file(args),
     "make_request": lambda args: _guard_make_request(args),
-    # "dump_env": lambda args: _guard_dump_env(args),
+    "dump_env": lambda args: _guard_dump_env(args),
     "find_files": lambda args: _guard_find_files(args),
     "directory_contents": lambda args: _guard_directory_contents(args),
     "run_bandit": lambda args: _guard_run_bandit(args),
@@ -77,9 +77,10 @@ def _guard_make_request(args):
         raise ValueError("Разрешены только GET и POST запросы")
 
 
-# def _guard_dump_env(args):
-#     if args:
-#         raise ValueError("dump_env не принимает аргументы")
+# Исправить
+def _guard_dump_env(args):
+    if args:
+        raise ValueError("dump_env не принимает аргументы")
 
 
 def _guard_find_files(args):
