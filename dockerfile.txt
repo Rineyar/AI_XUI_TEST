@@ -25,8 +25,6 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
 #Запуск
-#FROM python:3.14-slim-trixie
-#FROM python:3.12-slim
 FROM python:3.13-slim-trixie
 
 #Имя
@@ -35,6 +33,7 @@ LABEL description="Agent runtime test container"
 #Переменные среды
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
+ENV LC_ALL=C.UTF-8
 
 #Добавить необходимые библиотеки питону
 RUN pip install --no-cache-dir requests bandit semgrep
@@ -44,6 +43,9 @@ WORKDIR /agent/agent_core
 
 #Изолятор
 RUN mkdir -p /agent/workspace
+
+COPY agent/agent_core/src /agent/workspace/agent_core
+COPY agent/tools /agent/workspace/tools
 
 #Взять собранный под контейнер ELF
 COPY --from=builder /build/agent_core ./agent_core

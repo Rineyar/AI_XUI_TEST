@@ -38,7 +38,7 @@ def make_request(*, url : str, req_type : str = "get",
 
     r = None 
     error = ""
-    match req_type:
+    match req_type.lower():
         case "get":
             r, error = make_get(url, get_params)
         case "post":
@@ -52,7 +52,7 @@ def make_request(*, url : str, req_type : str = "get",
     else:
         output["error"] = error
 
-    return json.dumps(output)
+    return json.dumps(output, indent=4, ensure_ascii=False)
             
 if __name__ == "__main__":
     print(make_request(url="https://ya.ru"))

@@ -10,8 +10,8 @@ pub static FULL_PROMPT: &str = concat!(
     include_str!("../../system_prompt.md"),
     "MAIN_SKILLS:\n",
     include_str!("../../skills/main_skills.md"),
-    // "SAST_SKILLS:\n",
-    // include_str!("../../skills/sast/sast_skills.md"),
+    "SAST_SKILLS:\n",
+    include_str!("../../skills/sast/sast_skills.md"),
     // "DAST_SKILLS:\n",
     // include_str!("../../skills/dast/dast_skills.md"),
     "TOOLS:\n",
@@ -19,7 +19,7 @@ pub static FULL_PROMPT: &str = concat!(
 );
 
 //Максимум вывовов модели
-pub const MAX_LLM_CALLS: usize = 16;
+pub const MAX_LLM_CALLS: usize = 64;
 
 //Ссылка на модель на локалке
 pub static MODEL_LOCAL_URL: &str = "http://localhost:1234";

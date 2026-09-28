@@ -22,6 +22,7 @@ venv/
 
 # Локальные Rust файлы
 agent/agent_core/target/
+agent/tools/tools_rs/target/
 
 # Прочий локальный мусор
 *.log

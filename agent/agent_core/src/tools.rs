@@ -25,6 +25,7 @@ pub struct ToolRequest
     pub args: Value
 }
 
+/*
 //Макрос для обёртки функции в инструмент
 #[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")]
 pub async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError> 
@@ -76,6 +77,7 @@ pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError>
         }
     }
 }
+*/
 
 fn insert_option_arg<T>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 where
