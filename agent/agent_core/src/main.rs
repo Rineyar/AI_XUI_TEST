@@ -65,6 +65,7 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
 //docker attach agent-core
 //Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
 //docker compose run --rm agent -L тест на локалке
+//docker compose run --rm agent -O
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -84,8 +85,8 @@ async fn main()
 
     if args_list.len() == 1
     {
-        error!("Укажите модель через -L, -D или -Q!");
-        panic!("Укажите модель через -L, -D или -Q!");
+        error!("Укажите модель через -L, -D, -Q или -O!");
+        panic!("Укажите модель через -L, -D, -Q или -O!");
     } else if args_list.len() > 2
     {
         warn!("Обнаружены лишние аргументы:");
