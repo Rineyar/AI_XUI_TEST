@@ -179,7 +179,11 @@ async fn main()
     println!("PyEnv загружен: {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
-    .preamble(FULL_PROMPT) //System prompt
+    .preamble(SYSTEM_PROMPT) //System prompt
+    .context(TOOLS)
+    .context(MAIN_SKILLS)
+    .context(SAST_SKILLS)
+    .context(DAST_SKILLS)
     /* Не требуются более
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
