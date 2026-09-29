@@ -38,23 +38,6 @@ fn print_model_list(models: ModelList)
     }
 }
 
-/*
-Обязательно сделать проверку tools call
-А то эта херь имеет свойство выдумывать.
-+ динамическую обработку бы
-
-Потом мб хуки навесить
-
-Возможно вывести отдельный поток на управление py вызовами
-
-Сделать проверку того, что в лог пихается. (прямо сейчас он запихал в лог весь бинарник, т.к. не смог его прочитать)
-Что-то похожее уже возникало раньше...
-*/
-
-//docker compose build
-//docker compose up -d
-//docker attach agent-core
-//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -74,8 +57,8 @@ async fn main()
 
     if args_list.len() == 1
     {
-        error!("Укажите модель через -L, -D или -Q!");
-        panic!("Укажите модель через -L, -D или -Q!");
+        error!("Укажите модель через -L, -D, -Q или -O!");
+        panic!("Укажите модель через -L, -D, -Q или -O!");
     } else if args_list.len() > 2
     {
         warn!("Обнаружены лишние аргументы:");
@@ -139,10 +122,25 @@ async fn main()
             model.agent("Qwen3.8-27B")   
         }
 
+        "-O" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder()
+            .api_key(var("OPENROUTER_API_KEY").inspect_err(|err|
+            error!("Отсутствует OPENROUTER_API_KEY - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует OPENROUTER_API_KEY"))
+            .base_url("https://openrouter.ai/api/v1")
+            .build().inspect_err(|err|
+            error!("Не удалось подключиться к OpenRouter - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Не удалось подключиться к OpenRouter");
+
+            // Популярная стабильная бесплатная модель (можно поменять на "qwen/qwen-2.5-coder-32b-instruct:free")
+            model.agent("openrouter/auto")
+        }
+
         _ =>
         {
-            error!("Некорректный выбор модели!");
-            panic!("Некорректный выбор модели!");
+            error!("Некорректный выбор модели! Доступны: -L, -D, -Q, -O");
+            panic!("Некорректный выбор модели! Доступны: -L, -D, -Q, -O");
         }
     };
 
@@ -158,11 +156,6 @@ async fn main()
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
-    /* Не требуются более
-    .tool(ToolSumI32) //Инструмент добавили
-    .tool(ToolSumI64)
-    .tool(ToolSubI64)
-    */
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
