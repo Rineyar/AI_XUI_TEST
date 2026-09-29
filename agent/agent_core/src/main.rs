@@ -20,8 +20,6 @@ use tracing::{error, info, warn}; //Макросы логирования
 
 use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
 
-use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
-
 mod settings; //Настройки ядра
 use settings::*;
 
@@ -42,15 +40,6 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
     error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Не удалось получить список моделей");
 
-async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
-{
-    let models: ModelList = timeout(Duration::from_secs(5), model.list_models())
-    .await.inspect_err(|err|
-    error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Превышено время ожидания списка моделей").inspect_err(|err|
-    error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Не удалось получить список моделей");
-
     for (i, model) in models.data.iter().enumerate()
     {
         info!("№{}: {:?}", i + 1, model.id);
@@ -58,6 +47,24 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
     }
 }
 
+/*
+Обязательно сделать проверку tools call
+А то эта херь имеет свойство выдумывать.
++ динамическую обработку бы
+
+Потом мб хуки навесить
+
+Возможно вывести отдельный поток на управление py вызовами
+
+Сделать проверку того, что в лог пихается. (прямо сейчас он запихал в лог весь бинарник, т.к. не смог его прочитать)
+Что-то похожее уже возникало раньше...
+*/
+
+//docker compose build
+//docker compose up -d
+//docker attach agent-core
+//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
+//docker compose run --rm agent -L тест на локалке
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -77,8 +84,8 @@ async fn main()
 
     if args_list.len() == 1
     {
-        error!("Укажите модель через -L, -D, -Q или -O!");
-        panic!("Укажите модель через -L, -D, -Q или -O!");
+        error!("Укажите модель через -L, -D или -Q!");
+        panic!("Укажите модель через -L, -D или -Q!");
     } else if args_list.len() > 2
     {
         warn!("Обнаружены лишние аргументы:");
@@ -118,7 +125,6 @@ async fn main()
             .expect("Сборка разливного не удалась");
 
             print_model_list(&model, &time_start).await;
-            print_model_list(&model, &time_start).await;
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -134,7 +140,6 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(&model, &time_start).await;
             print_model_list(&model, &time_start).await;
 
             model.agent("Qwen3.8-27B")   
@@ -157,8 +162,8 @@ async fn main()
 
         _ =>
         {
-            error!("Некорректный выбор модели! Доступны: -L, -D, -Q, -O");
-            panic!("Некорректный выбор модели! Доступны: -L, -D, -Q, -O");
+            error!("Некорректный выбор модели!");
+            panic!("Некорректный выбор модели!");
         }
     };
 
@@ -174,10 +179,16 @@ async fn main()
 
     let agent: Agent = agent_builder
     .preamble(FULL_PROMPT) //System prompt
+    /* Не требуются более
+    .tool(ToolSumI32) //Инструмент добавили
+    .tool(ToolSumI64)
+    .tool(ToolSubI64)
+    */
+    .tool(RunZap)
+    .tool(RunNuclei)
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
-    //.tool(DumpEnv)
     //.tool(DumpEnv)
     .tool(FindFiles)
     .tool(DirectoryContents)
@@ -233,7 +244,6 @@ async fn main()
                 println!("Ошибка ответа!\n{:?}\n", err);
 
                 break;
-                break;
             }
         };
 
@@ -254,3 +264,4 @@ async fn main()
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
 }
+        
