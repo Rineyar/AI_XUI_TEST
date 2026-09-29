@@ -20,6 +20,8 @@ use tracing::{error, info, warn}; //Макросы логирования
 
 use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
 
+use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
+
 mod settings; //Настройки ядра
 use settings::*;
 
@@ -30,6 +32,15 @@ mod py_env; //Py среда
 use py_env::*;
 
 mod guards; //Гварды
+
+async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
+{
+    let models: ModelList = timeout(Duration::from_secs(5), model.list_models())
+    .await.inspect_err(|err|
+    error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Превышено время ожидания списка моделей").inspect_err(|err|
+    error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Не удалось получить список моделей");
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
 {
@@ -107,6 +118,7 @@ async fn main()
             .expect("Сборка разливного не удалась");
 
             print_model_list(&model, &time_start).await;
+            print_model_list(&model, &time_start).await;
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -122,6 +134,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
+            print_model_list(&model, &time_start).await;
             print_model_list(&model, &time_start).await;
 
             model.agent("Qwen3.8-27B")   
@@ -164,6 +177,7 @@ async fn main()
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
+    //.tool(DumpEnv)
     //.tool(DumpEnv)
     .tool(FindFiles)
     .tool(DirectoryContents)
@@ -218,6 +232,7 @@ async fn main()
                 
                 println!("Ошибка ответа!\n{:?}\n", err);
 
+                break;
                 break;
             }
         };
