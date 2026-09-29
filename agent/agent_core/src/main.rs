@@ -18,6 +18,8 @@ use dotenvy::dotenv; //Крейт для удобного чтения .env;
 use tracing_appender::{rolling::never, non_blocking}; //Логи
 use tracing::{error, info, warn}; //Макросы логирования
 
+use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
+
 mod settings; //Настройки ядра
 use settings::*;
 
@@ -29,8 +31,15 @@ use py_env::*;
 
 mod guards; //Гварды
 
-fn print_model_list(models: ModelList)
+async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
 {
+    let models: ModelList = timeout(Duration::from_secs(5), model.list_models())
+    .await.inspect_err(|err|
+    error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Превышено время ожидания списка моделей").inspect_err(|err|
+    error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Не удалось получить список моделей");
+
     for (i, model) in models.data.iter().enumerate()
     {
         info!("№{}: {:?}", i + 1, model.id);
@@ -97,9 +106,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err| 
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));          
+            print_model_list(&model, &time_start).await;
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -115,9 +122,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err|
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));   
+            print_model_list(&model, &time_start).await;
 
             model.agent("Qwen3.8-27B")   
         }
@@ -159,7 +164,7 @@ async fn main()
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
-    .tool(DumpEnv)
+    //.tool(DumpEnv)
     .tool(FindFiles)
     .tool(DirectoryContents)
     .tool(RunBandit)
@@ -213,7 +218,7 @@ async fn main()
                 
                 println!("Ошибка ответа!\n{:?}\n", err);
 
-                continue;
+                break;
             }
         };
 
