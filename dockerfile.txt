@@ -17,6 +17,10 @@ COPY agent/tools /build/agent/tools
 COPY agent/system_prompt.md /build/agent/system_prompt.md
 COPY agent/guardrails /build/agent/guardrails
 
+#Собрать без сохранения
+##Обратная совместимость присутствует. Желательно закоментить это и раскоментить нормльную сборку
+# RUN cargo build --release && cp target/release/agent_core /build/agent_core
+
 #Собрать со схранением
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
