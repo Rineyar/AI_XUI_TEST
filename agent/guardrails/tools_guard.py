@@ -22,7 +22,7 @@ TOOL_GUARDS = {
     "read_file": lambda args: _guard_read_file(args),
     "write_file": lambda args: _guard_write_file(args),
     "make_request": lambda args: _guard_make_request(args),
-    "dump_env": lambda args: _guard_dump_env(args),
+    # "dump_env": lambda args: _guard_dump_env(args),
     "find_files": lambda args: _guard_find_files(args),
     "directory_contents": lambda args: _guard_directory_contents(args),
     "run_bandit": lambda args: _guard_run_bandit(args),
@@ -37,15 +37,15 @@ def guard_select(request):
 
         guard = TOOL_GUARDS.get(function)
         if guard is None:
-            return _deny("Для инструмента нет guard-функции")
+            return _deny("for that tool there is no guardrails yet") # for that tool there is no guardrails yet
         if function not in policy.ALLOWED_TOOLS:
-            return _deny("Инструмент запрещён")
+            return _deny("Tool is prohibited ") # Tool is prohibited
 
         guard(args)
     except Exception as error:
         return _deny(str(error))
 
-    return {"allowed": True, "reason": "Разрешено"}
+    return {"allowed": True, "reason": "Allowed"}
 
 
 def _deny(reason):
@@ -59,37 +59,37 @@ def _guard_read_file(args):
 def _guard_write_file(args):
     path_guard.check_write_path(args.get("filename"))
     if "text" not in args:
-        raise ValueError("Не указан текст для записи")
+        raise ValueError("Text to write not specified ") # Text to write not specified
     if len(args.get("text").encode("utf-8")) > policy.MAX_FILE_SIZE:
-        raise ValueError("Записываемый файл превышает допустимый размер")
+        raise ValueError("text is bigger than 1000000 bytes") # text is bigger than 1000000 bytes
 
 
 def _guard_make_request(args):
     url = urlsplit(args.get("url"))
     if url.scheme.lower() != "https":
-        raise ValueError("Разрешены только HTTPS-запросы")
+        raise ValueError("allowed only https requests ") # allowed only https requests
     if not url.hostname:
-        raise ValueError("В URL отсутствует имя хоста")
+        raise ValueError("host name is missing in url") # host name is missing in url
     if url.username or url.password:
-        raise ValueError("Учётные данные в URL запрещены")
+        raise ValueError("privet data is prohibited ") # privet data is prohibited
 
     if args.get("req_type", "get").lower() not in {"get", "post"}:
-        raise ValueError("Разрешены только GET и POST запросы")
+        raise ValueError("only get and post requests are allowed") # only get and post requests are allowed
 
 
 # Исправить
-def _guard_dump_env(args):
-    if args:
-        raise ValueError("dump_env не принимает аргументы")
+# def _guard_dump_env(args):
+#     if args:
+#         raise ValueError("dump_env не принимает аргументы")
 
 
 def _guard_find_files(args):
     path_guard.check_path(args.get("path", "."), directory=True)
     pattern = args.get("pattern")
     if not pattern or len(pattern) > 100:
-        raise ValueError("Некорректный шаблон поиска")
+        raise ValueError("Incorrect template for search") # Incorrect template for search
     if ".." in pattern or "/" in pattern or "\\" in pattern:
-        raise ValueError("Шаблон должен описывать имя, а не путь")
+        raise ValueError("template must have name, but not a path") # template must have name, but not a path
 
 
 def _guard_directory_contents(args):
@@ -105,13 +105,13 @@ def _guard_run_bandit(args):
         path_guard.check_path(config_file, directory=False)
 
     if args.get("agg_type", "vuln") not in {"vuln", "file", "baseline"}:
-        raise ValueError("Недопустимый agg_type для Bandit")
+        raise ValueError("agg_type for Bandit is invalid") # agg_type for Bandit is invalid
     if args.get("sev_level", "LOW").upper() not in {"LOW", "MEDIUM", "HIGH"}:
-        raise ValueError("Недопустимый sev_level для Bandit")
+        raise ValueError("sev_level for Bandit is invalid") # sev_level for Bandit is invalid
     if args.get("conf_level", "LOW").upper() not in {"LOW", "MEDIUM", "HIGH"}:
-        raise ValueError("Недопустимый conf_level для Bandit")
+        raise ValueError("conf_level for Bandit is invalid") # conf_level for Bandit is invalid
     if args.get("recursive", True) not in {True, False}:
-        raise ValueError("Недопустимое значение recursive")
+        raise ValueError("recursive value is invalid") # recursive value is invalid
 
 
 def _guard_run_semgrep(args):
@@ -125,7 +125,7 @@ def _guard_run_semgrep(args):
 
     timeout = args.get("timeout", 5)
     if timeout < 1 or timeout > 60:
-        raise ValueError("Timeout Semgrep должен быть от 1 до 60 секунд")
+        raise ValueError("Timeout Semgrep have to be beetwen 1 or 60 seconds ") # Timeout Semgrep have to be beetwen 1 or 60 seconds
 
 
 def guard_response(response):
@@ -134,53 +134,53 @@ def guard_response(response):
         findings = report["findings"]
 
         if _contains_secret(json.dumps(report, ensure_ascii=False)):
-            return _deny("Ответ содержит потенциальные секретные данные")
+            return _deny("Respond have a potential privet data") # Respond have a potential privet data
 
         for number, finding in enumerate(findings, start=1):
             error = _check_finding(finding)
             if error:
-                return _deny(f"Находка {number}: {error}")
+                return _deny(f"Finding {number}: {error}")
     except Exception as error:
-        return _deny(f"Некорректный ответ: {error}")
+        return _deny(f"Incorrenct respond : {error}")
 
-    return {"allowed": True, "reason": "Ответ прошёл проверку"}
+    return {"allowed": True, "reason": "Respond pass the all checks"}
 
 
 def _check_finding(finding):
     missing = REQUIRED_FINDING_FIELDS - finding.keys()
     if missing:
-        return f"отсутствуют поля: {', '.join(sorted(missing))}"
+        return f"Missing name: {', '.join(sorted(missing))}"
 
     text_fields = ("title", "potential_threat")
     for field in text_fields:
         if not finding[field].strip():
-            return "текстовые поля не должны быть пустыми"
+            return "Text fields could not be empty" # Text fields could not be empty
 
     risk = finding["risk"]
     if risk.lower() not in RISKS:
-        return "указан недопустимый risk"
+        return "incorrect type of a risk ['critical', 'high', 'medium', 'low', 'info']" # incorrect type of a risk ["critical", "high", "medium", "low", "info"]
 
     confidence = finding["confidence"]
     if not 0 <= confidence <= 1:
-        return "confidence должен быть числом от 0 до 1"
+        return "confidence have to be float from 0 to 1" # confidence have to be float from 0 to 1
 
     cwe = finding["cwe"]
     if not re.fullmatch(r"CWE-[0-9]+", cwe):
-        return "CWE должен иметь формат CWE-N"
+        return "CWE have to be in format CWE-N" # CWE have to be in format CWE-N
 
     try:
         source = path_guard.check_path(finding["path"])
     except Exception as error:
-        return f"некорректный путь: {error}"
+        return f"incorrect path: {error}" # incorrect path
 
     line = finding["line"]
     if line < 1:
-        return "line должен быть положительным целым числом"
+        return "line have to be a positive number" # line have to be a positive number
 
     with source.open("r", encoding="utf-8", errors="replace") as file:
         line_count = sum(1 for _ in file)
     if line > max(line_count, 1):
-        return "указанная строка отсутствует в файле"
+        return "no specified line in file" #  no specified line in file
 
     return None
 
