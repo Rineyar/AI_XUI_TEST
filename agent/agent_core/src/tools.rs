@@ -366,3 +366,78 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
         res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
 }
+
+#[rig_tool(
+    name = "run_zap",
+    description = "Runs OWASP ZAP in Docker, scans the target URL \
+                   and returns a JSON report with discovered vulnerabilities.",
+    params(
+        url = "Target URL to scan (e.g., http://example.com).",
+        do_ascan = "Enable active scanning (true/false). Default: false.",
+        spider_timeout = "Spider timeout in seconds. Default: 600.",
+        ascan_timeout = "Active scan timeout in seconds. Default: 1800."
+    )
+)]
+pub async fn run_zap(
+    url: String,
+    do_ascan: Option<bool>,
+    spider_timeout: Option<i32>,
+    ascan_timeout: Option<i32>,
+) -> Result<String, ToolExecutionError>
+{
+    // Collect arguments
+    let mut args: Map<String, Value> = Map::with_capacity(4);
+    insert_arg(&mut args, "url", Some(url));                 // required
+    insert_arg(&mut args, "do_ascan", do_ascan);             // optional
+    insert_arg(&mut args, "spider_timeout", spider_timeout); // optional
+    insert_arg(&mut args, "ascan_timeout", ascan_timeout);   // optional
+
+    // Call the Python function
+    let res: Py<PyAny> = call_py_tool(ToolRequest {
+        module: "dast",
+        function: "run_zap",
+        args: Value::Object(args),
+    }).await?;
+
+    // Extract the result (Python returns a JSON string)
+    return Python::attach(|py: Python<'_>| {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}
+
+#[rig_tool(
+    name = "run_nuclei",
+    description = "Runs Nuclei, scans the target URL using templates \
+                   and returns a JSON report with discovered vulnerabilities.",
+    params(
+        target_url = "Target URL to scan (http protocol only).",
+        template = "Template name from the agent folder (a .yaml file). \
+                    If not specified, built-in Nuclei templates are used.",
+        severity = "Comma-separated severity levels to search for \
+                    (info,low,medium,high,critical). Default: all."
+    )
+)]
+pub async fn run_nuclei(
+    target_url: String,
+    template: Option<String>,
+    severity: Option<String>,
+) -> Result<String, ToolExecutionError>
+{
+    // Collect arguments
+    let mut args: Map<String, Value> = Map::with_capacity(3);
+    insert_arg(&mut args, "target_url", Some(target_url)); // required
+    insert_arg(&mut args, "template", template);           // optional
+    insert_arg(&mut args, "severity", severity);           // optional
+
+    // Call the Python function
+    let res: Py<PyAny> = call_py_tool(ToolRequest {
+        module: "dast",
+        function: "run_nuclei",
+        args: Value::Object(args),
+    }).await?;
+
+    // Extract the result (Python returns a JSON string)
+    return Python::attach(|py: Python<'_>| {
+        res.extract::<String>(py)
+    }).map_err(ToolExecutionError::from_error);
+}

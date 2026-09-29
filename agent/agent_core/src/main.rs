@@ -169,6 +169,8 @@ async fn main()
     .tool(ToolSumI64)
     .tool(ToolSubI64)
     */
+    .tool(RunZap)
+    .tool(RunNuclei)
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
