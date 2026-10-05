@@ -1,7 +1,7 @@
 import json
 import re
 from urllib.parse import urlsplit
-
+import ipaddress
 import path_guard
 import policy
 
@@ -27,6 +27,8 @@ TOOL_GUARDS = {
     "directory_contents": lambda args: _guard_directory_contents(args),
     "run_bandit": lambda args: _guard_run_bandit(args),
     "run_semgrep": lambda args: _guard_run_semgrep(args),
+    "run_nuclei": lambda args: _guard_run_nuclei(args),
+    "run_zap": lambda args: _guard_run_zap(args),
 }
 
 
@@ -130,6 +132,56 @@ def _guard_run_semgrep(args):
     if timeout < 1 or timeout > 60:
         raise ValueError("Timeout Semgrep должен быть от 1 до 60 секунд")
 
+def _host_is_local(hostname: str)->bool:
+    if hostname in {"localhost", "localhost.localdomain",
+        "ip6-localhost", "ip6-loopback", "host.docker.internal",
+        "gateway.docker.internal", "kubernetes.docker.internal",
+        "host.containers.internal"}:
+        return True
+
+    if hostname.endswith(".local"):
+        return True
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+
+    return (
+        ip.is_loopback          # 127.0.0.0/8, ::1
+        or ip.is_private        # RFC1918 + другие приватные
+        or ip.is_link_local     # 169.254.0.0/16, fe80::/10
+        or ip.is_unspecified    # 0.0.0.0, ::
+        or ip.is_reserved       # зарезервированные
+    )
+
+def _guard_run_nuclei(args):
+    template = args.get("template")
+    target_url = urlsplit(args.get("target_url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
+    if template:
+        path_guard.check_path(template, directory=False)
+    for severity in args.get("severity", RISKS):
+        if severity not in RISKS:
+            raise ValueError("Недопустимый уровень риска")
+
+def _guard_run_zap(args):
+    target_url = urlsplit(args.get("url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
 
 def guard_response(response):
     try:
