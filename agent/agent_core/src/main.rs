@@ -12,7 +12,8 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
-use std::io::stdin; //Для чтения строки
+use std::io::{stdin, BufRead}; //Для нового чтения строки
+use std::borrow::Cow; //Для обрезка строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -206,34 +207,29 @@ async fn main()
     info!("Агент готов: {:?}", time_start.elapsed());
     println!("Агент готов: {:?}", time_start.elapsed());
 
-    let mut text_prompt: String = String::with_capacity(128);
-
     loop
     {
-        text_prompt.clear();
+        let mut buffer: Vec<u8> = Vec::new();
 
-        let bytes: usize = match stdin().read_line(&mut text_prompt)
+        match stdin().lock().read_until(b'\n', &mut buffer)
         {
             Ok(bytes) =>
             {
-                bytes
+                if bytes == 0
+                {
+                    break;
+                }
             }
 
             Err(err) =>
             {
                 error!("Запрос не считан!\n{:?}", err);
-                println!("Запрос не считан!\n{:?}", err);
-
                 break;
             }
         };
 
-        if bytes == 0
-        {
-            break;
-        }
-
-        let prompt: &str = text_prompt.trim();
+        let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
+        let prompt: &str = prompt.trim();
 
         if prompt == "exit"
         {
@@ -258,7 +254,7 @@ async fn main()
             {
                 let response: PromptResponse = response;
 
-                info!("\n{:?}\n{:?}", response, time_prompt.elapsed());
+                info!("\n{}\n{:#?}\n{:?}", response.output, response.usage, time_prompt.elapsed());
                 println!("{}\n{:?}", response.output, time_prompt.elapsed());
             }
 
