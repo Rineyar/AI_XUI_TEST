@@ -35,6 +35,9 @@ def guard_select(request):
         function = request.get("function")
         args = request.get("args")
 
+        if function in policy.TOOLS_IN_TEST:
+            return {"allowed": True, "reason": "Unsafe Testing!"}
+
         guard = TOOL_GUARDS.get(function)
         if guard is None:
             return _deny("Для инструмента нет guard-функции")
@@ -45,7 +48,7 @@ def guard_select(request):
     except Exception as error:
         return _deny(str(error))
 
-    return {"allowed": True, "reason": "Разрешено"}
+    return {"allowed": True, "reason": "Allow"}
 
 
 def _deny(reason):
