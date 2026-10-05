@@ -8,7 +8,8 @@ def check_path(path, *, directory=None):
         raise ValueError("Путь должен находиться внутри проекта")
 
     try:
-        target = (policy.ROOT / requested).resolve(strict=True)
+        # Резолвим относительно WORKSPACE!
+        target = (policy.WORKSPACE / requested).resolve(strict=True)
         target.relative_to(policy.WORKSPACE)
     except Exception as error:
         raise ValueError("Путь не существует или выходит за пределы проекта") from error
@@ -26,17 +27,18 @@ def check_path(path, *, directory=None):
 def check_write_path(path):
     requested = Path(path)
     if requested.is_absolute() or ".." in requested.parts:
-        raise ValueError("Путь должен находиться внутри проекта")
+        raise ValueError("path should not be outside of a workspace")
 
     try:
-        target = (policy.ROOT / requested).resolve(strict=False)
+        # Резолвим относительно WORKSPACE!
+        target = (policy.WORKSPACE / requested).resolve(strict=False)
         target.relative_to(policy.WORKSPACE)
         parent = target.parent.resolve(strict=True)
         parent.relative_to(policy.WORKSPACE)
     except Exception as error:
-        raise ValueError("Путь выходит за пределы проекта или каталог не существует") from error
+        raise ValueError("Path does not exist or is out side of workspace") from error
 
     if target.exists() and not target.is_file():
-        raise ValueError("Ожидался путь к файлу")
+        raise ValueError("Expected a file")
 
     return target
