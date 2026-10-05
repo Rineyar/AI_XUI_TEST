@@ -1,4 +1,5 @@
 # Available Tools
+You allowed to use tools only in ./workspace
 ## read_file
 Reads a text file from the workspace.
 Use when file contents are required for the current task.

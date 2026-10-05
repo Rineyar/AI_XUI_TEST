@@ -6,17 +6,21 @@ use rig::client::ModelListingClient; //Для сбора листа моделе
 use rig::prelude::Agent; //Тип данных для агента
 use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
+use rig::agent::PromptResponse; //Скрытый тип подробного ответа
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
-use std::io::stdin; //Для чтения строки
+use std::io::{stdin, BufRead}; //Для нового чтения строки
+use std::borrow::Cow; //Для обрезка строки
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
 use tracing_appender::{rolling::never, non_blocking}; //Логи
 use tracing::{error, info, warn}; //Макросы логирования
+
+use tokio::time::{Duration, timeout}; //Для ограничения времени на операцию
 
 mod settings; //Настройки ядра
 use settings::*;
@@ -29,8 +33,15 @@ use py_env::*;
 
 mod guards; //Гварды
 
-fn print_model_list(models: ModelList)
+async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
 {
+    let models: ModelList = timeout(Duration::from_secs(5), model.list_models())
+    .await.inspect_err(|err|
+    error!("Превышено время ожидания списка моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Превышено время ожидания списка моделей").inspect_err(|err|
+    error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Не удалось получить список моделей");
+
     for (i, model) in models.data.iter().enumerate()
     {
         info!("№{}: {:?}", i + 1, model.id);
@@ -55,6 +66,8 @@ fn print_model_list(models: ModelList)
 //docker compose up -d
 //docker attach agent-core
 //Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
+//docker compose run --rm agent -L тест на локалке
+//docker compose run --rm agent -O
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -74,8 +87,8 @@ async fn main()
 
     if args_list.len() == 1
     {
-        error!("Укажите модель через -L, -D или -Q!");
-        panic!("Укажите модель через -L, -D или -Q!");
+        error!("Укажите модель через -L, -D, -Q или -O!");
+        panic!("Укажите модель через -L, -D, -Q или -O!");
     } else if args_list.len() > 2
     {
         warn!("Обнаружены лишние аргументы:");
@@ -114,9 +127,7 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err| 
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));          
+            print_model_list(&model, &time_start).await;
 
             model.agent(MODEL_DEEPSEEK_ID)
         }
@@ -132,11 +143,24 @@ async fn main()
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
-            print_model_list(model.list_models().await.inspect_err(|err|
-            error!("Не удалось получить список моделей - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Не удалось получить список моделей"));   
+            print_model_list(&model, &time_start).await;
 
             model.agent("Qwen3.8-27B")   
+        }
+
+        "-O" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder()
+            .api_key(var("OPENROUTER_API_KEY").inspect_err(|err|
+            error!("Отсутствует OPENROUTER_API_KEY - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует OPENROUTER_API_KEY"))
+            .base_url("https://openrouter.ai/api/v1")
+            .build().inspect_err(|err|
+            error!("Не удалось подключиться к OpenRouter - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Не удалось подключиться к OpenRouter");
+
+            // Популярная стабильная бесплатная модель (можно поменять на "qwen/qwen-2.5-coder-32b-instruct:free")
+            model.agent("openrouter/auto")
         }
 
         _ =>
@@ -157,16 +181,22 @@ async fn main()
     println!("PyEnv загружен: {:?}", time_start.elapsed());
 
     let agent: Agent = agent_builder
-    .preamble(FULL_PROMPT) //System prompt
+    .preamble(SYSTEM_PROMPT) //System prompt
+    .context(TOOLS)
+    .context(MAIN_SKILLS)
+    .context(SAST_SKILLS)
+    .context(DAST_SKILLS)
     /* Не требуются более
     .tool(ToolSumI32) //Инструмент добавили
     .tool(ToolSumI64)
     .tool(ToolSubI64)
     */
+    .tool(RunZap)
+    .tool(RunNuclei)
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
-    .tool(DumpEnv)
+    //.tool(DumpEnv)
     .tool(FindFiles)
     .tool(DirectoryContents)
     .tool(RunBandit)
@@ -177,67 +207,68 @@ async fn main()
     info!("Агент готов: {:?}", time_start.elapsed());
     println!("Агент готов: {:?}", time_start.elapsed());
 
-    let mut text_prompt: String = String::new();
-
-    if let Err(err) = stdin().read_line(&mut text_prompt)
+    loop
     {
-        error!("Запрос не считан!\n{:?}", err);
-        println!("Запрос не считан!\n{:?}", err);
-    }
+        let mut buffer: Vec<u8> = Vec::new();
 
-    while text_prompt.trim() != "exit"
-    {
-        let time_prompt: Instant = Instant::now();
+        match stdin().lock().read_until(b'\n', &mut buffer)
+        {
+            Ok(bytes) =>
+            {
+                if bytes == 0
+                {
+                    break;
+                }
+            }
 
-        if text_prompt.is_empty() || text_prompt.trim() == ""
+            Err(err) =>
+            {
+                error!("Запрос не считан!\n{:?}", err);
+                break;
+            }
+        };
+
+        let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
+        let prompt: &str = prompt.trim();
+
+        if prompt == "exit"
+        {
+            break;
+        }
+
+        if prompt.is_empty()
         {
             warn!("Пустой запрос даст ошибку");
             println!("Пустой запрос даст ошибку");
 
-            text_prompt.clear();
-
-            if let Err(err) = stdin().read_line(&mut text_prompt)
-            {
-                error!("Запрос не считан!\n{:?}", err);
-                println!("Запрос не считан!\n{:?}", err);
-
-                break;
-            }
-
             continue;
         }
 
-        let response: String = match agent.prompt(&text_prompt).await
+        let time_prompt: Instant = Instant::now();
+
+        println!("Запрос передан в обработку...");
+
+        match agent.prompt(prompt).extended_details().await
         {
             Ok(response) =>
             {
-                response
+                let response: PromptResponse = response;
+
+                info!("\n{}\n{:#?}\n{:?}", response.output, response.usage, time_prompt.elapsed());
+                println!("{}\n{:?}", response.output, time_prompt.elapsed());
             }
 
             Err(err) =>
             {
                 error!("Ошибка ответа!\n{:?}", err);
-                
-                println!("Ошибка ответа!\n{:?}\n", err);
+                println!("Ошибка ответа!\n{:?}", err);
 
                 continue;
             }
-        };
-
-        info!("\n{}\n{:?}", response, time_prompt.elapsed());
-        println!("{}\n{:?}", response, time_prompt.elapsed());
-
-        text_prompt.clear();
-
-        if let Err(err) = stdin().read_line(&mut text_prompt)
-        {
-            error!("Запрос не считан!\n{:?}", err);
-            println!("Запрос не считан!\n{:?}", err);
-
-            break;
         }
     }
 
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
 }
+        

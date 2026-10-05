@@ -194,7 +194,7 @@ pub async fn get_rand_num(left: i32, right: i32, seed: Option<i32>) -> Result<i3
 ```
 Если сам не осилишь. Ну завайбкодь, чё.  
 После этого обёртку вставить в tools.rs. Он в agent/agent_core/src.  
-И в main.rs нужно после 141 строки поставить
+И в main.rs нужно после ~181 строки поставить
 ```rust
 .tool(GetRandNum)
 ```

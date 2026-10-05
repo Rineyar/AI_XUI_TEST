@@ -42,6 +42,5 @@ def dump_env() -> str:
     
     return json.dumps(output, indent=4, ensure_ascii=False)
 
-
 if __name__ == "__main__":
     print(dump_env())
