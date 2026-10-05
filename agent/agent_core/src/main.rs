@@ -6,6 +6,7 @@ use rig::client::ModelListingClient; //Для сбора листа моделе
 use rig::prelude::Agent; //Тип данных для агента
 use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
+use rig::agent::PromptResponse; //Скрытый тип подробного ответа
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
@@ -205,64 +206,69 @@ async fn main()
     info!("Агент готов: {:?}", time_start.elapsed());
     println!("Агент готов: {:?}", time_start.elapsed());
 
-    let mut text_prompt: String = String::new();
+    let mut text_prompt: String = String::with_capacity(128);
 
-    if let Err(err) = stdin().read_line(&mut text_prompt)
+    loop
     {
-        error!("Запрос не считан!\n{:?}", err);
-        println!("Запрос не считан!\n{:?}", err);
-    }
+        text_prompt.clear();
 
-    while text_prompt.trim() != "exit"
-    {
-        let time_prompt: Instant = Instant::now();
-
-        if text_prompt.is_empty() || text_prompt.trim() == ""
+        let bytes: usize = match stdin().read_line(&mut text_prompt)
         {
-            warn!("Пустой запрос даст ошибку");
-            println!("Пустой запрос даст ошибку");
+            Ok(bytes) =>
+            {
+                bytes
+            }
 
-            text_prompt.clear();
-
-            if let Err(err) = stdin().read_line(&mut text_prompt)
+            Err(err) =>
             {
                 error!("Запрос не считан!\n{:?}", err);
                 println!("Запрос не считан!\n{:?}", err);
 
                 break;
             }
+        };
+
+        if bytes == 0
+        {
+            break;
+        }
+
+        let prompt: &str = text_prompt.trim();
+
+        if prompt == "exit"
+        {
+            break;
+        }
+
+        if prompt.is_empty()
+        {
+            warn!("Пустой запрос даст ошибку");
+            println!("Пустой запрос даст ошибку");
 
             continue;
         }
 
-        let response: String = match agent.prompt(&text_prompt).await
+        let time_prompt: Instant = Instant::now();
+
+        println!("Запрос передан в обработку...");
+
+        match agent.prompt(prompt).extended_details().await
         {
             Ok(response) =>
             {
-                response
+                let response: PromptResponse = response;
+
+                info!("\n{:?}\n{:?}", response, time_prompt.elapsed());
+                println!("{}\n{:?}", response.output, time_prompt.elapsed());
             }
 
             Err(err) =>
             {
                 error!("Ошибка ответа!\n{:?}", err);
-                
-                println!("Ошибка ответа!\n{:?}\n", err);
+                println!("Ошибка ответа!\n{:?}", err);
 
-                break;
+                continue;
             }
-        };
-
-        info!("\n{}\n{:?}", response, time_prompt.elapsed());
-        println!("{}\n{:?}", response, time_prompt.elapsed());
-
-        text_prompt.clear();
-
-        if let Err(err) = stdin().read_line(&mut text_prompt)
-        {
-            error!("Запрос не считан!\n{:?}", err);
-            println!("Запрос не считан!\n{:?}", err);
-
-            break;
         }
     }
 
