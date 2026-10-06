@@ -17,9 +17,9 @@ use std::borrow::Cow; //Для обрезка строки
 use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
-use std::io::{stdout, Stdout}; //Для вывода с crossterm
+use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
 
-use crossterm::{cursor::MoveToColumn, execute, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
+use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -44,14 +44,13 @@ static CONSOLE_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отпр
 enum ConsoleOut
 {
     Text(String),
-    Compressed(CompressedOut)
+    Compressed(CompressedOut),
 }
 
 struct CompressedOut
 {
-    id: usize,
     compressed: bool,
-    out: Vec<String>
+    out: Vec<ConsoleOut>,
 }
 
 enum Out
@@ -62,6 +61,218 @@ enum Out
     Toggle(usize),
     Clear,
     Shutdown
+}
+
+fn spawn_console_thread() -> thread::JoinHandle<()>
+{
+    fn render(stdout: &mut Stdout, blocks: &[ConsoleOut], rendered_lines: &mut usize)
+    {
+        let mut new_lines: usize = 0;
+
+        if *rendered_lines > 0
+        {
+            queue!(stdout, MoveUp(*rendered_lines as u16), MoveToColumn(0), Clear(ClearType::FromCursorDown)).expect("Ошибка чистки вывода");
+        }
+
+        for block in blocks.iter()
+        {
+            match block
+            {
+                ConsoleOut::Text(text) =>
+                {
+                    queue!(stdout, Print(text), Print('\n')).expect("Ошибка очереди вывода");
+                    new_lines += 1;
+                }
+
+                ConsoleOut::Compressed(block) =>
+                {
+                    if block.compressed
+                    {
+                        queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
+                        new_lines += 1;
+                    } else {
+                        for line in block.out.iter()
+                        {
+                            //queue!(stdout, Print(line), Print('\n')).expect("Ошибка очереди вывода");
+                            new_lines += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        stdout.flush().expect("Ошибка вывода");
+
+        *rendered_lines = new_lines;
+    }
+
+    fn get_state_by_path_mut<'a>(path: &[usize], state: &'a mut[ConsoleOut]) -> &'a mut ConsoleOut
+    {
+        let mut current_state: &mut ConsoleOut = &mut state[path[0]];
+
+        for &current_idx in path.iter().skip(1)
+        {
+            current_state = match current_state
+            {
+                ConsoleOut::Compressed(block) =>
+                {
+                    &mut block.out[current_idx]
+                }
+
+                ConsoleOut::Text(_) =>
+                {
+                    unreachable!("Путь проходит через Text");
+                }
+            };
+        }
+
+        return current_state;
+    }
+
+    let (tx, rx) = mpsc::channel(); //Связь с консолью
+
+    CONSOLE_OUT_TX.set(tx).expect("Невозможное случилось"); //static поставить
+
+    let console_thread: thread::JoinHandle<()> = thread::spawn(move ||
+    {
+        let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
+        let mut compressed_index: Vec<Vec<usize>> = (0..8).map(|_| Vec::with_capacity(4)).collect(); //Вектора индексов по глубине
+
+        let mut stdout: Stdout = stdout(); //Просто без скобок
+
+        let mut current_compressed: Option<Vec<usize>> = None;
+
+        let mut rendered_lines: usize = 0; //Сколько линий есть
+
+        while let Ok(event) = rx.recv()
+        {
+            match event
+            {
+                Out::Shutdown =>
+                {
+                    break;
+                }
+
+                Out::CompressedStart =>
+                {
+                    match &mut current_compressed
+                    {
+                        Some(path) =>
+                        {
+                            let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
+
+                            let new_idx: usize;
+
+                            match current_state
+                            {
+                                ConsoleOut::Compressed(block) =>
+                                {
+                                    new_idx = block.out.len();
+
+                                    block.out.push(ConsoleOut::Compressed( CompressedOut { compressed: true, out: Vec::new() }));
+                                }
+
+                                ConsoleOut::Text(_) =>
+                                {
+                                    unreachable!("current_compressed указывает на Text");
+                                }
+                            }
+
+                            path.push(new_idx);
+                            compressed_index.push(path.clone());
+                        }
+
+                        None =>
+                        {
+                            let new_idx: usize = state.len();
+
+                            state.push(ConsoleOut::Compressed(CompressedOut { compressed: true, out: Vec::new() }));
+                            
+                            let path: Vec<usize> = vec![new_idx];
+
+                            compressed_index.push(path.clone());
+                            current_compressed = Some(path);
+                        }
+                    }
+                }
+
+                Out::Text(msg) =>
+                {
+                    match &current_compressed
+                    {
+                        Some(path) =>
+                        {
+                            let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
+
+                            match current_state
+                            {
+                                ConsoleOut::Text(_) =>
+                                {
+                                    unreachable!("current_compressed указывает на Text");
+                                }
+
+                                ConsoleOut::Compressed(block) =>
+                                {
+                                    block.out.push(ConsoleOut::Text(msg));
+                                }
+                            }
+                        }
+
+                        None =>
+                        {
+                            state.push(ConsoleOut::Text(msg));
+                        }
+                    }
+                }
+
+                Out::CompressedEnd =>
+                {
+                    if let Some(path) = &mut current_compressed
+                    {
+                        path.pop().expect("Пустой путь внутри current_compressed");
+
+                        if path.is_empty()
+                        {
+                            current_compressed = None;
+                        }
+                    } else {
+                        unreachable!("Невозможно вызвать End без открытого блока");
+                    }
+                }
+
+                Out::Toggle(id) =>
+                {
+                    let path: &Vec<usize> = &compressed_index[id];
+
+                    let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
+
+                    match current_state
+                    {
+                        ConsoleOut::Compressed(block) =>
+                        {
+                            block.compressed = !block.compressed;
+                        }
+
+                        ConsoleOut::Text(_) =>
+                        {
+                            unreachable!("Путь Toggle указывает на Text");
+                        }
+                    }
+                }
+
+                Out::Clear =>
+                {
+                    state.clear();
+                    compressed_index.clear();
+                    current_compressed = None;
+                }
+            }
+
+            render(&mut stdout, &state, &mut rendered_lines);
+        }
+    });
+
+    return console_thread;
 }
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
@@ -104,125 +315,7 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    let (tx, rx) = mpsc::channel(); //Связь с консолью
-
-    CONSOLE_OUT_TX.set(tx).expect("Невозможное случилось"); //static поставить
-
-    //Создать поток
-    let console_thread: thread::JoinHandle<_> = thread::spawn(move ||
-    {
-        let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
-        let mut compressed_index: Vec<usize> = Vec::with_capacity(8); //Упакованные блоки
-
-        let mut stdout: Stdout = stdout();
-
-        let mut current_compressed: Option<usize> = None;
-
-        fn render(blocks: &[ConsoleOut])
-        {
-            for block in blocks.iter()
-            {
-                match block
-                {
-                    ConsoleOut::Text(text) =>
-                    {
-                        println!("{}", text);
-                    }
-
-                    ConsoleOut::Compressed(block) =>
-                    {
-                        if block.compressed
-                        {
-                            println!("Скрыто {} элементов", block.out.len());
-                        } else {
-                            for line in block.out.iter()
-                            {
-                                println!("{}", line);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        while let Ok(event) = rx.recv()
-        {
-            match event
-            {
-                Out::Shutdown =>
-                {
-                    break;
-                }
-
-                Out::CompressedStart =>
-                {
-                    let id: usize = compressed_index.len();
-                    let state_index: usize = state.len();
-
-                    state.push(ConsoleOut::Compressed(CompressedOut { id, compressed: true, out: Vec::new() }));
-
-                    compressed_index.push(state_index);
-
-                    current_compressed = Some(state_index);
-                }
-
-                Out::Text(msg) =>
-                {
-                    match current_compressed
-                    {
-                        Some(index) =>
-                        {
-                            match &mut state[index]
-                            {
-                                ConsoleOut::Compressed(block) =>
-                                {
-                                    block.out.push(msg);
-                                }
-
-                                ConsoleOut::Text(_) =>
-                                {
-                                    unreachable!("current_compressed указывает не на CompressedOut");
-                                }
-                            }
-                        }
-
-                        None =>
-                        {
-                            state.push(ConsoleOut::Text(msg));
-                        }
-                    }
-                }
-
-                Out::CompressedEnd =>
-                {
-                    current_compressed = None;
-                }
-
-                Out::Toggle(id) =>
-                {
-                    match &mut state[compressed_index[id]]
-                    {
-                        ConsoleOut::Compressed(block) =>
-                        {
-                            block.compressed = !block.compressed;
-                        }
-
-                        ConsoleOut::Text(_) =>
-                        {
-                            unreachable!("compressed_index указывает не на CompressedOut");
-                        }
-                    }
-                }
-
-                Out::Clear =>
-                {
-                    state.clear();
-                    compressed_index.clear();
-                    current_compressed = None;
-                }
-            }
-        }
-    });
+    let console_thread: thread::JoinHandle<()> = spawn_console_thread(); //Создать поток
 
     //Логер
     let (loger, _log_guard) = non_blocking(never("./logs", format!("log_{:?}.log", 
