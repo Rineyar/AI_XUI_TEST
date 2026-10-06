@@ -12,18 +12,19 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
-use std::io::{stdin, BufRead}; //Для нового чтения строки
-use std::borrow::Cow; //Для обрезка строки
 use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
 use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
-use std::sync::{Arc, RwLock, RwLockWriteGuard}; //Общение меж потоками вышло на новый уровень
 
-use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
-use crossterm::{cursor::position}; //Понять куда тычет
+use crossterm::{execute, event::{EnableMouseCapture, DisableMouseCapture}, 
+terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}}; //А это и есть вывод
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind}; //Для захвата и обработки мыши
 
 use ratatui::{backend::CrosstermBackend, text::{Line, Text}, widgets::Paragraph, Terminal}; //Новый вывод
+use ratatui::layout::{Constraint, Layout}; //Рамочки
+
+use tui_textarea::TextArea; //Кусок вввода
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -104,7 +105,7 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         
     }
 
-    fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, blocks: &[ConsoleOut], compressed_rows: &mut [Option<u16>])
+    fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, blocks: &[ConsoleOut], compressed_rows: &mut [Option<u16>], input: &TextArea<'static>, scroll: u16)
     {
         let mut lines: Vec<Line<'static>> = Vec::with_capacity(16);
 
@@ -120,11 +121,12 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
 
         terminal.draw(|frame|
         {
-            let area = frame.area();
+            let [output_area, input_area] = Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).areas(frame.area());
 
-            let paragraph = Paragraph::new(lines);
+            let paragraph = Paragraph::new(lines.clone()).scroll((scroll, 0));
 
-            frame.render_widget(paragraph, area);
+            frame.render_widget(paragraph, output_area);
+            frame.render_widget(input, input_area);
         }).expect("Ошибка отрисовки Ratatui");
 
         /*
@@ -181,6 +183,11 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         let mut compressed_index: Vec<Vec<usize>> = Vec::with_capacity(16); //Вектора индексов по глубине
         let mut compressed_rows: Vec<Option<u16>> = Vec::with_capacity(64); //Координаты < и V для свёрток
 
+        let mut input: TextArea<'static> = TextArea::default();
+        let mut running: bool = true;
+
+        enable_raw_mode().expect("Не удалось включить raw mode");
+        execute!(stdout(), EnterAlternateScreen, EnableMouseCapture).expect("Не удалось настроить терминал");
         let backend: CrosstermBackend<Stdout> = CrosstermBackend::new(stdout()); //Связь с cross
 
         //Консолька
@@ -188,149 +195,223 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
 
         let mut current_compressed: Option<Vec<usize>> = None;
 
-        while let Ok(event) = rx.recv()
+        let mut scroll: u16 = 0;
+
+        while running
         {
-            match event
+            while let Ok(out) = rx.try_recv()
             {
-                Out::Shutdown =>
+                match out
                 {
-                    break;
-                }
-
-                Out::CompressedStart =>
-                {
-                    match &mut current_compressed
+                    Out::Shutdown =>
                     {
-                        Some(path) =>
+                        running = false;
+                        break;
+                    }
+
+                    Out::CompressedStart =>
+                    {
+                        match &mut current_compressed
                         {
-                            let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
-
-                            let new_idx: usize;
-
-                            match current_state
+                            Some(path) =>
                             {
-                                ConsoleOut::Compressed(block) =>
-                                {
-                                    new_idx = block.out.len();
+                                let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
 
-                                    block.out.push(ConsoleOut::Compressed( CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
+                                let new_idx: usize;
+
+                                match current_state
+                                {
+                                    ConsoleOut::Compressed(block) =>
+                                    {
+                                        new_idx = block.out.len();
+
+                                        block.out.push(ConsoleOut::Compressed( CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
+                                    }
+
+                                    ConsoleOut::Text(_) =>
+                                    {
+                                        unreachable!("current_compressed указывает на Text");
+                                    }
                                 }
 
-                                ConsoleOut::Text(_) =>
+                                path.push(new_idx);
+                                compressed_index.push(path.clone());
+                            }
+
+                            None =>
+                            {
+                                let new_idx: usize = state.len();
+
+                                state.push(ConsoleOut::Compressed(CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
+                                
+                                let path: Vec<usize> = vec![new_idx];
+
+                                compressed_index.push(path.clone());
+                                current_compressed = Some(path);
+                            }
+                        }
+                    }
+
+                    Out::Text(msg) =>
+                    {
+                        match &current_compressed
+                        {
+                            Some(path) =>
+                            {
+                                let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
+
+                                match current_state
                                 {
-                                    unreachable!("current_compressed указывает на Text");
+                                    ConsoleOut::Text(_) =>
+                                    {
+                                        unreachable!("current_compressed указывает на Text");
+                                    }
+
+                                    ConsoleOut::Compressed(block) =>
+                                    {
+                                        block.out.push(ConsoleOut::Text(msg));
+                                    }
                                 }
                             }
 
-                            path.push(new_idx);
-                            compressed_index.push(path.clone());
-                        }
-
-                        None =>
-                        {
-                            let new_idx: usize = state.len();
-
-                            state.push(ConsoleOut::Compressed(CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
-                            
-                            let path: Vec<usize> = vec![new_idx];
-
-                            compressed_index.push(path.clone());
-                            current_compressed = Some(path);
-                        }
-                    }
-                }
-
-                Out::Text(msg) =>
-                {
-                    match &current_compressed
-                    {
-                        Some(path) =>
-                        {
-                            let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
-
-                            match current_state
+                            None =>
                             {
-                                ConsoleOut::Text(_) =>
-                                {
-                                    unreachable!("current_compressed указывает на Text");
-                                }
-
-                                ConsoleOut::Compressed(block) =>
-                                {
-                                    block.out.push(ConsoleOut::Text(msg));
-                                }
+                                state.push(ConsoleOut::Text(msg));
                             }
                         }
+                    }
 
-                        None =>
+                    Out::CompressedEnd =>
+                    {
+                        if let Some(path) = &mut current_compressed
                         {
-                            state.push(ConsoleOut::Text(msg));
+                            path.pop().expect("Пустой путь внутри current_compressed");
+
+                            if path.is_empty()
+                            {
+                                current_compressed = None;
+                            }
+                        } else {
+                            unreachable!("Невозможно вызвать End без открытого блока");
                         }
+                    }
+
+                    Out::Toggle(id) =>
+                    {
+                        let path: &Vec<usize> = match compressed_index.get(id)
+                        {
+                            Some(path) => path,
+
+                            None =>
+                            {
+                                warn!("id блока не существует");
+                                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                                Out::Text(format!("id блока не существует")))
+                                .inspect_err(|err| error!("\nОшибка связи с консолью - {}", err))
+                                .expect("Ошибка связи с консолью");
+
+                                continue;
+                            }
+                        };
+
+                        let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
+
+                        match current_state
+                        {
+                            ConsoleOut::Compressed(block) =>
+                            {
+                                block.compressed = !block.compressed;
+                            }
+
+                            ConsoleOut::Text(_) =>
+                            {
+                                unreachable!("Путь Toggle указывает на Text");
+                            }
+                        }
+                    }
+
+                    Out::Clear =>
+                    {
+                        state.clear();
+                        compressed_index.clear();
+                        current_compressed = None;
                     }
                 }
 
-                Out::CompressedEnd =>
+                //scroll = u16::MAX;
+            }
+
+            if !running
+            {
+                break;
+            }
+
+            if event::poll(Duration::from_millis(20)).expect("Ошибка чтения консоли")
+            {
+                match event::read().expect("Ошибка чтения события")
                 {
-                    if let Some(path) = &mut current_compressed
+                    Event::Key(key) if key.kind == KeyEventKind::Press =>
                     {
-                        path.pop().expect("Пустой путь внутри current_compressed");
-
-                        if path.is_empty()
+                        match key.code
                         {
-                            current_compressed = None;
-                        }
-                    } else {
-                        unreachable!("Невозможно вызвать End без открытого блока");
-                    }
-                }
+                            KeyCode::Enter =>
+                            {
+                                let prompt: String = input.lines().join("\n");
 
-                Out::Toggle(id) =>
-                {
-                    let path: &Vec<usize> = match compressed_index.get(id)
-                    {
-                        Some(path) => path,
+                                prompt_tx.send(prompt)
+                                    .expect("Main больше не принимает ввод");
 
-                        None =>
-                        {
-                            warn!("id блока не существует");
-                            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                            Out::Text(format!("id блока не существует")))
-                            .inspect_err(|err| error!("\nОшибка связи с консолью - {}", err))
-                            .expect("Ошибка связи с консолью");
+                                input = TextArea::default();
+                            }
 
-                            continue;
-                        }
-                    };
-
-                    let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
-
-                    match current_state
-                    {
-                        ConsoleOut::Compressed(block) =>
-                        {
-                            block.compressed = !block.compressed;
-                        }
-
-                        ConsoleOut::Text(_) =>
-                        {
-                            unreachable!("Путь Toggle указывает на Text");
+                            _ =>
+                            {
+                                input.input(key);
+                            }
                         }
                     }
-                }
 
-                Out::Clear =>
-                {
-                    state.clear();
-                    compressed_index.clear();
-                    current_compressed = None;
+                    Event::Mouse(mouse) =>
+                    {
+                        match mouse.kind
+                        {
+                            MouseEventKind::ScrollUp =>
+                            {
+                                scroll = scroll.saturating_sub(3);
+                            }
+
+                            MouseEventKind::ScrollDown =>
+                            {
+                                scroll = scroll.saturating_add(3);
+                            }
+
+                            MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                if let Some(id) = compressed_rows.iter().position(|row| *row == Some(mouse.row))
+                                {
+                                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                                    .send(Out::Toggle(id))
+                                    .expect("Ошибка связи с консолью");
+                                }
+                            }
+
+                            _ => {}
+                        }
+                    }
+
+                    _ => {}
                 }
             }
 
             compressed_rows.clear();
             compressed_rows.resize(compressed_index.len(), None);
 
-            render(&mut terminal, &state, &mut compressed_rows);
+            render(&mut terminal, &state, &mut compressed_rows, &input, scroll);
         }
+
+        disable_raw_mode().expect("Не удалось отключить raw mode");
+        execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen).expect("Не удалось восстановить терминал");
+        terminal.show_cursor().expect("Не удалось вернуть курсор");
     });
 
     return console_thread_writer;
@@ -555,39 +636,6 @@ async fn main()
         if prompt == "exit"
         {
             break;
-        }
-
-        if let Some(command) = prompt.strip_prefix(':')
-        {
-            if command == "_"
-            {
-                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Clear)
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-                .expect("Ошибка связи с консолью");
-            } else {
-                match command.parse::<usize>()
-                {
-                    Ok(id) =>
-                    {
-                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                        Out::Toggle(id))
-                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-                        .expect("Ошибка связи с консолью");
-                    }
-
-                    Err(err) =>
-                    {
-                        error!("Некорректный id свёртки - {:?}", err);
-                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                        Out::Text(format!("Некорректный id свёртки - {:?}", err)))
-                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-                        .expect("Ошибка связи с консолью");
-                    }
-                }
-            }
-
-            continue;
         }
 
         if prompt.is_empty()
