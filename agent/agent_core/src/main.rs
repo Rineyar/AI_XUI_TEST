@@ -39,23 +39,29 @@ use py_env::*;
 
 mod guards; //Гварды
 
-static COMPRESSED_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отправщик для консоли
+static CONSOLE_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отправщик для консоли
+
+enum ConsoleOut
+{
+    Text(String),
+    Compressed(CompressedOut)
+}
 
 struct CompressedOut
 {
+    id: usize,
     compressed: bool,
-    out: Vec<String>,
-    rendered_lines: usize
+    out: Vec<String>
 }
 
 enum Out
 {
-    ToolCalled(String),
-    GuardResponse(String),
-    ToolResult(String),
-    Toggle,
+    CompressedStart,
+    Text(String),
+    CompressedEnd,
+    Toggle(usize),
     Clear,
-    Shutdown,
+    Shutdown
 }
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
@@ -100,13 +106,17 @@ async fn main()
 
     let (tx, rx) = mpsc::channel(); //Связь с консолью
 
-    COMPRESSED_OUT_TX.set(tx).expect("Невозможное случилось");
+    CONSOLE_OUT_TX.set(tx).expect("Невозможное случилось"); //static поставить
 
+    //Создать поток
     let console_thread: thread::JoinHandle<_> = thread::spawn(move ||
     {
-        let mut state: CompressedOut = CompressedOut { compressed: false, out: Vec::new(), rendered_lines: 0 };
+        let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
+        let mut compressed_index: Vec<usize> = Vec::with_capacity(8); //Упакованные блоки
 
         let mut stdout: Stdout = stdout();
+
+        let mut current_compressed: Option<usize> = None;
 
         while let Ok(event) = rx.recv()
         {
@@ -117,35 +127,69 @@ async fn main()
                     break;
                 }
 
-                Out::ToolCalled(msg) =>
+                Out::CompressedStart =>
                 {
-                    state.out.push(msg);
+                    let id: usize = compressed_index.len();
+                    let state_index: usize = state.len();
 
-                    if state.compressed
+                    state.push(ConsoleOut::Compressed(CompressedOut { id, compressed: true, out: Vec::new() }));
+
+                    compressed_index.push(state_index);
+
+                    current_compressed = Some(state_index);
+                }
+
+                Out::Text(msg) =>
+                {
+                    match current_compressed
                     {
-                        execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine), Print(format!("Вызвано {} событий <", state.out.len())))
-                        .expect("Ошибка вывода консоли");
-                    } 
+                        Some(index) =>
+                        {
+                            match &mut state[index]
+                            {
+                                ConsoleOut::Compressed(block) =>
+                                {
+                                    block.out.push(msg);
+                                }
+
+                                ConsoleOut::Text(_) =>
+                                {
+                                    unreachable!("current_compressed указывает не на CompressedOut");
+                                }
+                            }
+                        }
+
+                        None =>
+                        {
+                            state.push(ConsoleOut::Text(msg));
+                        }
+                    }
                 }
 
-                Out::GuardResponse(msg) =>
+                Out::CompressedEnd =>
                 {
-
+                    current_compressed = None;
                 }
 
-                Out::ToolResult(msg) =>
+                Out::Toggle(id) =>
                 {
+                    match &mut state[compressed_index[id]]
+                    {
+                        ConsoleOut::Compressed(block) =>
+                        {
+                            block.compressed = !block.compressed;
+                        }
 
-                }
-
-                Out::Toggle =>
-                {
-
+                        ConsoleOut::Text(_) =>
+                        {
+                            unreachable!("current_compressed указывает не на CompressedOut");
+                        }
+                    }
                 }
 
                 Out::Clear =>
                 {
-
+                    state.clear();
                 }
             }
         }
@@ -349,7 +393,7 @@ async fn main()
     }
 
     //Закрыть поток консоли
-    COMPRESSED_OUT_TX.get().unwrap(/*SAFETY точно инит есть*/).send(Out::Shutdown)
+    CONSOLE_OUT_TX.get().unwrap(/*SAFETY точно инит есть*/).send(Out::Shutdown)
     .inspect_err(|err| 
     { error!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed());
     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()); })
