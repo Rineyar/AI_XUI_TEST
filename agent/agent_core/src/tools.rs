@@ -12,6 +12,7 @@ use tracing::{error, info, warn}; //Логи
 
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
+use crate::{COMPRESSED_OUT_TX, Out}; //Связь с консолью
 
 //Для PyEnv
 use pyo3::prelude::*;
@@ -94,20 +95,35 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     let time: Instant = Instant::now();
 
     info!("\nИнструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
-    println!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
+    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::ToolCalled(format!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed())))
+    .inspect_err(|err| 
+    { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+    .expect("Ошибка связи с консолью");
 
     let (verdict, request): (GuardResponse, ToolRequest) = tools_guard(request).await; //Вызов гварда
 
     if !verdict.allowed //Можно?
     {
         warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
-        println!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::GuardResponse(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| 
+        { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+        println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+        .expect("Ошибка связи с консолью");
 
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
     info!("\nВердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
-    println!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::GuardResponse(format!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+    .inspect_err(|err| 
+    { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+    .expect("Ошибка связи с консолью");
 
     let py_env: &HashMap<String, PyFileModule> = get_py_env(); //Получить вторник
 
@@ -122,7 +138,12 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                 None =>
                 {
                     error!("\nИнструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
-                    println!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
+                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::ToolResult(format!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed())))
+                    .inspect_err(|err| 
+                    { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+                    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+                    .expect("Ошибка связи с консолью");
 
                     return Err(ToolExecutionError::not_found(format!("Tool {:?} in module {:?} is missing", request.function, request.module)));
                 }
@@ -132,7 +153,12 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         None => 
         {
             error!("\nМодуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
-            println!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
+            COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::ToolResult(format!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed())))
+            .inspect_err(|err| 
+            { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+            println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+            .expect("Ошибка связи с консолью");
 
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
@@ -153,9 +179,27 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
 
             match ret
             {
-                Ok(_) => { info!("\nУспешно выполнено\t|\t{:?}", time.elapsed()); println!("Успешно выполнено\t|\t{:?}", time.elapsed()); }
+                Ok(_) => 
+                {
+                    info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::ToolResult(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                    .inspect_err(|err| 
+                    { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+                    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+                    .expect("Ошибка связи с консолью");
+                }
                 
-                Err(_) => { error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); println!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); }
+                Err(_) => 
+                {
+                    error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); 
+                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::ToolResult(format!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed())))
+                    .inspect_err(|err| 
+                    { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
+                    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
+                    .expect("Ошибка связи с консолью");
+                }
             }
 
             return ret;
