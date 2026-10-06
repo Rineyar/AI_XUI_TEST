@@ -86,7 +86,5 @@ pub async fn tools_guard(request: ToolRequest) -> (GuardResponse, ToolRequest)
         {   
             return (GuardResponse { allowed: false, reason: err.to_string() }, request);
         }
-    }; }).await.inspect_err(|err|
-    { error!("Ошибка присоединения потока гварда - {:?}", err); println!("Ошибка присоединения потока гварда - {:?}", err);
-    }).expect("Ошибка присоединения потока гварда");
+    }; }).await.inspect_err(|err| error!("Ошибка присоединения потока гварда - {:?}", err)).expect("Ошибка присоединения потока гварда");
 }
