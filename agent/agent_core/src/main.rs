@@ -118,6 +118,33 @@ async fn main()
 
         let mut current_compressed: Option<usize> = None;
 
+        fn render(blocks: &[ConsoleOut])
+        {
+            for block in blocks.iter()
+            {
+                match block
+                {
+                    ConsoleOut::Text(text) =>
+                    {
+                        println!("{}", text);
+                    }
+
+                    ConsoleOut::Compressed(block) =>
+                    {
+                        if block.compressed
+                        {
+                            println!("Скрыто {} элементов", block.out.len());
+                        } else {
+                            for line in block.out.iter()
+                            {
+                                println!("{}", line);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         while let Ok(event) = rx.recv()
         {
             match event
@@ -182,7 +209,7 @@ async fn main()
 
                         ConsoleOut::Text(_) =>
                         {
-                            unreachable!("current_compressed указывает не на CompressedOut");
+                            unreachable!("compressed_index указывает не на CompressedOut");
                         }
                     }
                 }
@@ -190,6 +217,8 @@ async fn main()
                 Out::Clear =>
                 {
                     state.clear();
+                    compressed_index.clear();
+                    current_compressed = None;
                 }
             }
         }
