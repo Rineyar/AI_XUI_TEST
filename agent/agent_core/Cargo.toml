@@ -18,7 +18,6 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 tools_rs = { path = "../tools/tools_rs" }
 crossterm = { version = "0.29.0" }
-reedline = "0.52.1"
 
 [lints.clippy]
 needless_return = "allow"
