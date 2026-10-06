@@ -12,7 +12,7 @@ use tracing::{error, info, warn}; //Логи
 
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
-use crate::{COMPRESSED_OUT_TX, Out}; //Связь с консолью
+use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
 
 //Для PyEnv
 use pyo3::prelude::*;
@@ -95,8 +95,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     let time: Instant = Instant::now();
 
     info!("\nИнструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed());
-    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-    Out::ToolCalled(format!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed())))
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с: {:?}\t|\t{:?}", request.function, request.args, time.elapsed())))
     .inspect_err(|err| 
     { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -107,8 +107,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     if !verdict.allowed //Можно?
     {
         warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
-        COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-        Out::GuardResponse(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
         .inspect_err(|err| 
         { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
         println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -118,8 +118,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     }
 
     info!("\nВердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
-    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-    Out::GuardResponse(format!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Вердикт: гвард разрешил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
     .inspect_err(|err| 
     { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -138,8 +138,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                 None =>
                 {
                     error!("\nИнструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed());
-                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                    Out::ToolResult(format!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed())))
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::Text(format!("Инструмента нет - {:?}\t|\t{:?}", request.function, time.elapsed())))
                     .inspect_err(|err| 
                     { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
                     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -153,8 +153,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         None => 
         {
             error!("\nМодуля нет - {:?}\t|\t{:?}", request.module, time.elapsed());
-            COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::ToolResult(format!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed())))
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Модуля нет - {:?}\t|\t{:?}", request.module, time.elapsed())))
             .inspect_err(|err| 
             { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
             println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -182,8 +182,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                 Ok(_) => 
                 {
                     info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
-                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                    Out::ToolResult(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
                     .inspect_err(|err| 
                     { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
                     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
@@ -193,8 +193,8 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                 Err(_) => 
                 {
                     error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); 
-                    COMPRESSED_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                    Out::ToolResult(format!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed())))
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed())))
                     .inspect_err(|err| 
                     { error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed());
                     println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()); })
