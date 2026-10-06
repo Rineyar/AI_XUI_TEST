@@ -14,6 +14,9 @@ use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
 use std::io::{stdin, BufRead}; //Для нового чтения строки
 use std::borrow::Cow; //Для обрезка строки
+use std::sync::OnceLock; //Хранение вывода
+use std::thread; //Теперь консоль будет жить здесь
+use std::sync::mpsc;
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -32,6 +35,24 @@ mod py_env; //Py среда
 use py_env::*;
 
 mod guards; //Гварды
+
+static COMPRESSED_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new();
+
+struct CompressedOut
+{
+    compressed: bool,
+    out: Vec<Out>,
+}
+
+enum Out
+{
+    ToolCalled(String),
+    GuardResponse(String),
+    ToolResult(String),
+    Toggle,
+    Clear,
+    Shutdown,
+}
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
 {
@@ -73,6 +94,21 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
+    let (tx, rx) = mpsc::channel(); //Связь с консолью
+
+    COMPRESSED_OUT_TX.set(tx).expect("Невозможное случилось");
+
+    let console_thread: thread::JoinHandle<_> = thread::spawn(move ||
+    {
+        let mut state: CompressedOut = CompressedOut {compressed: true, out: Vec::new()};
+
+        loop
+        {
+            
+        }
+    });
+
+    //Логер
     let (loger, _log_guard) = non_blocking(never("./logs", format!("log_{:?}.log", 
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Времени нет").as_secs())));
 
@@ -105,6 +141,7 @@ async fn main()
 
     drop(args_list);
 
+    //Основа агента
     let agent_builder: AgentBuilder = match model_select.as_str()
     {
         "-L" =>
@@ -207,7 +244,7 @@ async fn main()
     info!("Агент готов: {:?}", time_start.elapsed());
     println!("Агент готов: {:?}", time_start.elapsed());
 
-    loop
+    loop //Общение с душевнобольным
     {
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -267,6 +304,13 @@ async fn main()
             }
         }
     }
+
+    COMPRESSED_OUT_TX.get().unwrap().send(Out::Shutdown).unwrap(); //Закрыть поток консоли
+
+    //Подтянуть её поток
+    console_thread.join().inspect_err(|err|
+    error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка присоединения потока консили");
 
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
