@@ -18,12 +18,10 @@ use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
 use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
-use std::sync::{Arc, RwLock}; //Общение меж потоками вышло на новый уровень
+use std::sync::{Arc, RwLock, RwLockWriteGuard}; //Общение меж потоками вышло на новый уровень
 
 use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
-use crossterm::{cursor::position, event::{Event, EventStream, MouseEventKind, MouseButton}}; //Понять куда тычет
-
-use futures_util::StreamExt; //Сбор событий
+use crossterm::{cursor::position}; //Понять куда тычет
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -68,7 +66,7 @@ enum Out
     Shutdown
 }
 
-fn spawn_console_threads() -> (thread::JoinHandle<()>, tokio::task::JoinHandle<()>)
+fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> thread::JoinHandle<()>
 {
     fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize, compressed_rows: &mut [Option<u16>], start_row: u16)
     {
@@ -158,78 +156,7 @@ fn spawn_console_threads() -> (thread::JoinHandle<()>, tokio::task::JoinHandle<(
     
     let (tx, rx) = mpsc::channel(); //Связь с консолью
 
-    CONSOLE_OUT_TX.set(tx.clone()).expect("Невозможное случилось"); //static поставить
-
-    let compressed_rows: Arc<RwLock<Vec<Option<u16>>>> = Arc::new(RwLock::new(Vec::with_capacity(64))); //Координаты < и V для свёрток
-    let rows_reader: Arc<RwLock<Vec<Option<u16>>>> = Arc::clone(&compressed_rows);
-    let rows_writer: Arc<RwLock<Vec<Option<u16>>>> = Arc::clone(&compressed_rows);
-
-    let console_thread_reader: tokio::task::JoinHandle<()> = tokio::spawn(async move
-    {
-        let mut events: EventStream = EventStream::new();
-
-        while let Some(event) = events.next().await
-        {
-            match event
-            {
-                /*
-                Ok(Event::Key(key)) =>
-                {
-                    match key.code
-                    {
-                        KeyCode::Char(c) =>
-                        {
-                            prompt.push(c);
-                        }
-
-                        KeyCode::Backspace =>
-                        {
-                            prompt.pop();
-                        }
-
-                        KeyCode::Enter =>
-                        {
-                            // отправить prompt в main
-                            // очистить буфер
-                        }
-
-                        _ => {}
-                    }
-                }
-                */
-
-                Ok(Event::Mouse(mouse)) =>
-                {
-                    if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-                    {
-                        let id: Option<usize> = 
-                        {
-                            let rows = rows_reader.read().expect("RwLock консоли отравлен");
-
-                            rows.iter().position(|row: &Option<u16>| *row == Some(mouse.row))
-                        };
-
-                        if let Some(id) = id
-                        {
-                            tx.send(Out::Toggle(id)).expect("Ошибка связи с консолью");
-                        }
-                    }
-                }
-
-                // Ok(Event::Resize(_, _)) =>
-                // {
-                //     // позже можно попросить renderer перерисоваться
-                // }
-
-                Err(_err) =>
-                {
-                    //Логи потом сделать
-                }
-
-                _ => {} //Не unreacheable т.к. просто скип
-            }
-        }
-    });
+    CONSOLE_OUT_TX.set(tx).expect("Невозможное случилось"); //static поставить
 
     let console_thread_writer: thread::JoinHandle<()> = thread::spawn(move ||
     {
@@ -366,7 +293,7 @@ fn spawn_console_threads() -> (thread::JoinHandle<()>, tokio::task::JoinHandle<(
                 }
             }
 
-            let mut lock = rows_writer.write().expect("");
+            let mut lock: RwLockWriteGuard<'_, Vec<Option<u16>>> = compressed_rows.write().expect("");
             lock.clear();
             lock.resize(compressed_index.len(), None);
 
@@ -374,7 +301,7 @@ fn spawn_console_threads() -> (thread::JoinHandle<()>, tokio::task::JoinHandle<(
         }
     });
 
-    return (console_thread_writer, console_thread_reader);
+    return console_thread_writer;
 }
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
@@ -427,8 +354,11 @@ async fn main()
     tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
 
     info!("Логер ожил: {:?}", time_start.elapsed());
-    
-    let console_threads: (thread::JoinHandle<()>, tokio::task::JoinHandle<()>) = spawn_console_threads(); //Создать потоки
+
+    let compressed_rows: Arc<RwLock<Vec<Option<u16>>>> = Arc::new(RwLock::new(Vec::with_capacity(64))); //Координаты < и V для свёрток
+
+    //Создать потоки
+    let console_thread: thread::JoinHandle<()> = spawn_console_thread(Arc::clone(&compressed_rows));
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
@@ -656,13 +586,9 @@ async fn main()
     .expect("Ошибка связи с консолью");
 
     //Подтянуть её поток
-    console_threads.0.join()
+    console_thread.join()
     .inspect_err(|err| error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка присоединения потока консоли");
-
-    console_threads.1.await
-    .inspect_err(|err| error!("Ошибка ожидания потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Ошибка ожидания потока консоли");
 
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
