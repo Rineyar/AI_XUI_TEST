@@ -18,9 +18,12 @@ use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
 use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
+use std::sync::{Arc, RwLock}; //Общение меж потоками вышло на новый уровень
 
 use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
-use crossterm::cursor::position; //Понять куда тычет
+use crossterm::{cursor::position, event::{Event, EventStream, MouseEventKind, MouseButton}}; //Понять куда тычет
+
+use futures_util::StreamExt; //Сбор событий
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -65,7 +68,7 @@ enum Out
     Shutdown
 }
 
-fn spawn_console_thread() -> thread::JoinHandle<()>
+fn spawn_console_threads() -> (thread::JoinHandle<()>, tokio::task::JoinHandle<()>)
 {
     fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize, compressed_rows: &mut [Option<u16>], start_row: u16)
     {
@@ -152,16 +155,86 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
 
         return current_state;
     }
-
+    
     let (tx, rx) = mpsc::channel(); //Связь с консолью
 
-    CONSOLE_OUT_TX.set(tx).expect("Невозможное случилось"); //static поставить
+    CONSOLE_OUT_TX.set(tx.clone()).expect("Невозможное случилось"); //static поставить
 
-    let console_thread: thread::JoinHandle<()> = thread::spawn(move ||
+    let compressed_rows: Arc<RwLock<Vec<Option<u16>>>> = Arc::new(RwLock::new(Vec::with_capacity(64))); //Координаты < и V для свёрток
+    let rows_reader: Arc<RwLock<Vec<Option<u16>>>> = Arc::clone(&compressed_rows);
+    let rows_writer: Arc<RwLock<Vec<Option<u16>>>> = Arc::clone(&compressed_rows);
+
+    let console_thread_reader: tokio::task::JoinHandle<()> = tokio::spawn(async move
+    {
+        let mut events: EventStream = EventStream::new();
+
+        while let Some(event) = events.next().await
+        {
+            match event
+            {
+                /*
+                Ok(Event::Key(key)) =>
+                {
+                    match key.code
+                    {
+                        KeyCode::Char(c) =>
+                        {
+                            prompt.push(c);
+                        }
+
+                        KeyCode::Backspace =>
+                        {
+                            prompt.pop();
+                        }
+
+                        KeyCode::Enter =>
+                        {
+                            // отправить prompt в main
+                            // очистить буфер
+                        }
+
+                        _ => {}
+                    }
+                }
+                */
+
+                Ok(Event::Mouse(mouse)) =>
+                {
+                    if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+                    {
+                        let id: Option<usize> = 
+                        {
+                            let rows = rows_reader.read().expect("RwLock консоли отравлен");
+
+                            rows.iter().position(|row: &Option<u16>| *row == Some(mouse.row))
+                        };
+
+                        if let Some(id) = id
+                        {
+                            tx.send(Out::Toggle(id)).expect("Ошибка связи с консолью");
+                        }
+                    }
+                }
+
+                // Ok(Event::Resize(_, _)) =>
+                // {
+                //     // позже можно попросить renderer перерисоваться
+                // }
+
+                Err(_err) =>
+                {
+                    //Логи потом сделать
+                }
+
+                _ => {} //Не unreacheable т.к. просто скип
+            }
+        }
+    });
+
+    let console_thread_writer: thread::JoinHandle<()> = thread::spawn(move ||
     {
         let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
         let mut compressed_index: Vec<Vec<usize>> = Vec::with_capacity(16); //Вектора индексов по глубине
-        let mut compressed_rows: Vec<Option<u16>> = Vec::with_capacity(64); //Координаты < и V для свёрток
 
         let mut stdout: Stdout = stdout(); //Просто без скобок
 
@@ -293,14 +366,15 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
                 }
             }
 
-            compressed_rows.clear();
-            compressed_rows.resize(compressed_index.len(), None);
+            let mut lock = rows_writer.write().expect("");
+            lock.clear();
+            lock.resize(compressed_index.len(), None);
 
-            render(&mut stdout, &state, &mut rendered_lines, &mut compressed_rows);
+            render(&mut stdout, &state, &mut rendered_lines, &mut lock);
         }
     });
 
-    return console_thread;
+    return (console_thread_writer, console_thread_reader);
 }
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
@@ -354,7 +428,7 @@ async fn main()
 
     info!("Логер ожил: {:?}", time_start.elapsed());
     
-    let console_thread: thread::JoinHandle<()> = spawn_console_thread(); //Создать поток
+    let console_threads: (thread::JoinHandle<()>, tokio::task::JoinHandle<()>) = spawn_console_threads(); //Создать потоки
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
@@ -582,9 +656,13 @@ async fn main()
     .expect("Ошибка связи с консолью");
 
     //Подтянуть её поток
-    console_thread.join()
+    console_threads.0.join()
     .inspect_err(|err| error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Ошибка присоединения потока консили");
+    .expect("Ошибка присоединения потока консоли");
+
+    console_threads.1.await
+    .inspect_err(|err| error!("Ошибка ожидания потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка ожидания потока консоли");
 
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
