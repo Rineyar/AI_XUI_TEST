@@ -87,10 +87,10 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
 
                 if block.compressed
                 {
-                    queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов <"), Print('\n')).expect("Ошибка очереди вывода");
+                    queue!(stdout, Print(block.id), Print(":> Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
                     *new_lines += 1;
                 } else {
-                    queue!(stdout, Print("Раскрыто "), Print(block.out.len()), Print(" элементов V"), Print('\n')).expect("Ошибка очереди вывода");
+                    queue!(stdout, Print(block.id), Print(":V Раскрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
                     *new_lines += 1;
 
                     for block in block.out.iter()
@@ -267,7 +267,21 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
 
                 Out::Toggle(id) =>
                 {
-                    let path: &Vec<usize> = &compressed_index[id];
+                    let path: &Vec<usize> = match compressed_index.get(id)
+                    {
+                        Some(path) => path,
+
+                        None =>
+                        {
+                            warn!("id блока не существует");
+                            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                            Out::Text(format!("id блока не существует")))
+                            .inspect_err(|err| error!("\nОшибка связи с консолью - {}", err))
+                            .expect("Ошибка связи с консолью");
+
+                            continue;
+                        }
+                    };
 
                     let current_state: &mut ConsoleOut = get_state_by_path_mut(path, &mut state);
 
@@ -528,6 +542,8 @@ async fn main()
         let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
         let prompt: &str = prompt.trim();
 
+        info!("Запрос - {}\t|\t{:?}", prompt, time_start.elapsed());
+
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(prompt.to_string()))
         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
@@ -538,16 +554,16 @@ async fn main()
             break;
         }
 
-        if prompt.starts_with(':')
+        if let Some(command) = prompt.strip_prefix(':')
         {
-            if prompt[1..3] == *"_"
+            if command == "_"
             {
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                 Out::Clear)
                 .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
             } else {
-                match prompt[1..3].parse::<usize>()
+                match command.parse::<usize>()
                 {
                     Ok(id) =>
                     {
@@ -555,8 +571,6 @@ async fn main()
                         Out::Toggle(id))
                         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                         .expect("Ошибка связи с консолью");
-
-                        continue;
                     }
 
                     Err(err) =>
@@ -566,11 +580,11 @@ async fn main()
                         Out::Text(format!("Некорректный id свёртки - {:?}", err)))
                         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                         .expect("Ошибка связи с консолью");
-
-                        continue;
                     }
                 }
             }
+
+            continue;
         }
 
         if prompt.is_empty()
