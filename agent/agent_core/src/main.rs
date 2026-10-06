@@ -676,7 +676,17 @@ async fn main()
         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
-        match agent.prompt(prompt).extended_details().await
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+        .send(Out::CompressedStart)
+        .expect("Ошибка связи с консолью");
+
+        let response: Result<PromptResponse, _> =  agent.prompt(prompt).extended_details().await;
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+        .send(Out::CompressedEnd)
+        .expect("Ошибка связи с консолью");
+
+        match response
         {
             Ok(response) =>
             {
