@@ -12,6 +12,8 @@ use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
 use std::env::args; //Арги для выбора модели
 use std::env::var; //Окружение для API ключа
+use std::io::{stdin, BufRead}; //Для нового чтения строки
+use std::borrow::Cow; //Для обрезка строки
 use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
@@ -20,8 +22,6 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard}; //Общение меж пото
 
 use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
 use crossterm::{cursor::position}; //Понять куда тычет
-
-use reedline::{DefaultPrompt, Reedline, Signal}; //Чтение ввода и мыши
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -502,21 +502,20 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    let mut line_editor: Reedline = Reedline::create(); //Управление
-    let reedline_prompt: DefaultPrompt = DefaultPrompt::default(); //События
+    let mut buffer: Vec<u8> = Vec::with_capacity(128);
 
     loop //Общение с душевнобольным
     {
-        let prompt: String = match line_editor.read_line(&reedline_prompt)
-        {
-            Ok(Signal::Success(prompt)) =>
-            {
-                prompt
-            }
+        buffer.clear();
 
-            Ok(Signal::CtrlC) | Ok(Signal::CtrlD) =>
+        match stdin().lock().read_until(b'\n', &mut buffer)
+        {
+            Ok(bytes) =>
             {
-                break;
+                if bytes == 0
+                {
+                    break;
+                }
             }
 
             Err(err) =>
@@ -524,13 +523,9 @@ async fn main()
                 error!("Запрос не считан!\n{:?}", err);
                 break;
             }
-
-            _ =>
-            {
-                continue;
-            }
         };
 
+        let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
         let prompt: &str = prompt.trim();
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
@@ -541,6 +536,41 @@ async fn main()
         if prompt == "exit"
         {
             break;
+        }
+
+        if prompt.starts_with(':')
+        {
+            if prompt[1..3] == *"_"
+            {
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Clear)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .expect("Ошибка связи с консолью");
+            } else {
+                match prompt[1..3].parse::<usize>()
+                {
+                    Ok(id) =>
+                    {
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                        Out::Toggle(id))
+                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                        .expect("Ошибка связи с консолью");
+
+                        continue;
+                    }
+
+                    Err(err) =>
+                    {
+                        error!("Некорректный id свёртки - {:?}", err);
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                        Out::Text(format!("Некорректный id свёртки - {:?}", err)))
+                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                        .expect("Ошибка связи с консолью");
+
+                        continue;
+                    }
+                }
+            }
         }
 
         if prompt.is_empty()
