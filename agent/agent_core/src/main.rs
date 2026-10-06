@@ -16,7 +16,10 @@ use std::io::{stdin, BufRead}; //Для нового чтения строки
 use std::borrow::Cow; //Для обрезка строки
 use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
-use std::sync::mpsc;
+use std::sync::mpsc; //Связь tx-rx меж потоками
+use std::io::{stdout, Stdout}; //Для вывода с crossterm
+
+use crossterm::{cursor::MoveToColumn, execute, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -41,7 +44,8 @@ static COMPRESSED_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //От�
 struct CompressedOut
 {
     compressed: bool,
-    out: Vec<Out>,
+    out: Vec<String>,
+    rendered_lines: usize
 }
 
 enum Out
@@ -100,7 +104,9 @@ async fn main()
 
     let console_thread: thread::JoinHandle<_> = thread::spawn(move ||
     {
-        let mut state: CompressedOut = CompressedOut {compressed: false, out: Vec::new()};
+        let mut state: CompressedOut = CompressedOut { compressed: false, out: Vec::new(), rendered_lines: 0 };
+
+        let mut stdout: Stdout = stdout();
 
         while let Ok(event) = rx.recv()
         {
@@ -113,7 +119,13 @@ async fn main()
 
                 Out::ToolCalled(msg) =>
                 {
-                    
+                    state.out.push(msg);
+
+                    if state.compressed
+                    {
+                        execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine), Print(format!("Вызвано {} событий <", state.out.len())))
+                        .expect("Ошибка вывода консоли");
+                    } 
                 }
 
                 Out::GuardResponse(msg) =>
