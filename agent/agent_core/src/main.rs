@@ -36,7 +36,7 @@ use py_env::*;
 
 mod guards; //Гварды
 
-static COMPRESSED_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new();
+static COMPRESSED_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отправщик для консоли
 
 struct CompressedOut
 {
@@ -100,11 +100,42 @@ async fn main()
 
     let console_thread: thread::JoinHandle<_> = thread::spawn(move ||
     {
-        let mut state: CompressedOut = CompressedOut {compressed: true, out: Vec::new()};
+        let mut state: CompressedOut = CompressedOut {compressed: false, out: Vec::new()};
 
-        loop
+        while let Ok(event) = rx.recv()
         {
-            
+            match event
+            {
+                Out::Shutdown =>
+                {
+                    break;
+                }
+
+                Out::ToolCalled(msg) =>
+                {
+                    
+                }
+
+                Out::GuardResponse(msg) =>
+                {
+
+                }
+
+                Out::ToolResult(msg) =>
+                {
+
+                }
+
+                Out::Toggle =>
+                {
+
+                }
+
+                Out::Clear =>
+                {
+
+                }
+            }
         }
     });
 
@@ -305,11 +336,17 @@ async fn main()
         }
     }
 
-    COMPRESSED_OUT_TX.get().unwrap().send(Out::Shutdown).unwrap(); //Закрыть поток консоли
+    //Закрыть поток консоли
+    COMPRESSED_OUT_TX.get().unwrap(/*SAFETY точно инит есть*/).send(Out::Shutdown)
+    .inspect_err(|err| 
+    { error!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed());
+    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()); })
+    .expect("Ошибка связи с консолью");
 
     //Подтянуть её поток
     console_thread.join().inspect_err(|err|
-    error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    { error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed());
+    println!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed())} )
     .expect("Ошибка присоединения потока консили");
 
     info!("{:?}", time_start.elapsed());
