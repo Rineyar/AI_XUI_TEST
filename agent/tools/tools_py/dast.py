@@ -21,7 +21,7 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
     command = ["nuclei", "-u", target_url, "-type", "http", "-max-host-error", "0", "-severity", severity, "-j", '-silent']
 
     if template:
-        command.extend(["-t", r"./agent/"+template])
+        command.extend(["-t", template])
 
     try:
         nuclei = subprocess.run(command, capture_output=True, text=True)
