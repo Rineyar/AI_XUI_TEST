@@ -65,6 +65,34 @@ enum Out
 
 fn spawn_console_thread() -> thread::JoinHandle<()>
 {
+    fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize)
+    {
+        match block
+        {
+            ConsoleOut::Text(text) =>
+            {
+                *new_lines += text.matches('\n').count();
+                queue!(stdout, Print(text), Print('\n')).expect("Ошибка очереди вывода");
+                *new_lines += 1;
+            }
+
+            ConsoleOut::Compressed(block) =>
+            {
+                if block.compressed
+                {
+                    queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
+                    *new_lines += 1;
+                } else {
+                    for block in block.out.iter()
+                    {
+                        render_blocks(stdout, block, new_lines);
+                    }
+                }
+            }
+        }
+        
+    }
+
     fn render(stdout: &mut Stdout, blocks: &[ConsoleOut], rendered_lines: &mut usize)
     {
         let mut new_lines: usize = 0;
@@ -76,29 +104,7 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
 
         for block in blocks.iter()
         {
-            match block
-            {
-                ConsoleOut::Text(text) =>
-                {
-                    queue!(stdout, Print(text), Print('\n')).expect("Ошибка очереди вывода");
-                    new_lines += 1;
-                }
-
-                ConsoleOut::Compressed(block) =>
-                {
-                    if block.compressed
-                    {
-                        queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
-                        new_lines += 1;
-                    } else {
-                        for line in block.out.iter()
-                        {
-                            //queue!(stdout, Print(line), Print('\n')).expect("Ошибка очереди вывода");
-                            new_lines += 1;
-                        }
-                    }
-                }
-            }
+            render_blocks(stdout, block, &mut new_lines);
         }
 
         stdout.flush().expect("Ошибка вывода");
