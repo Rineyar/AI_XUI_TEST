@@ -15,14 +15,14 @@ use std::env::var; //Окружение для API ключа
 use std::sync::OnceLock; //Хранение вывода
 use std::thread; //Теперь консоль будет жить здесь
 use std::sync::mpsc; //Связь tx-rx меж потоками
-use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
+use std::io::{stdout, Stdout}; //Для вывода с crossterm
 
 use crossterm::{execute, event::{EnableMouseCapture, DisableMouseCapture}, 
 terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}}; //А это и есть вывод
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind}; //Для захвата и обработки мыши
 
-use ratatui::{backend::CrosstermBackend, text::{Line, Text}, widgets::Paragraph, Terminal}; //Новый вывод
-use ratatui::layout::{Constraint, Layout}; //Рамочки
+use ratatui::{backend::CrosstermBackend, text::{Line}, widgets::Paragraph, Terminal}; //Новый вывод
+use ratatui::layout::{Constraint, Layout, Rect}; //Рамочки и координаты символов
 
 use tui_textarea::TextArea; //Кусок вввода
 
@@ -105,7 +105,7 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         
     }
 
-    fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, blocks: &[ConsoleOut], compressed_rows: &mut [Option<u16>], input: &TextArea<'static>, scroll: u16)
+    fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, blocks: &[ConsoleOut], compressed_rows: &mut [Option<u16>], input: &TextArea<'static>, scroll: u16) -> (Rect, usize)
     {
         let mut lines: Vec<Line<'static>> = Vec::with_capacity(16);
 
@@ -119,9 +119,13 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
             render_blocks(block, &mut lines, compressed_rows);
         }
 
+        let mut current_output_area: Rect = Rect::default();
+
         terminal.draw(|frame|
         {
             let [output_area, input_area] = Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).areas(frame.area());
+
+            current_output_area = output_area;
 
             let paragraph = Paragraph::new(lines.clone()).scroll((scroll, 0));
 
@@ -129,25 +133,7 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
             frame.render_widget(input, input_area);
         }).expect("Ошибка отрисовки Ratatui");
 
-        /*
-        let (_, cursor_row) = position().expect("Не удалось получить позицию курсора");
-
-        let start_row: u16 = cursor_row.saturating_sub(*rendered_lines as u16);
-
-        if *rendered_lines > 0
-        {
-            queue!(stdout, MoveUp(*rendered_lines as u16), MoveToColumn(0), Clear(ClearType::FromCursorDown)).expect("Ошибка чистки вывода");
-        }
-
-        for block in blocks.iter()
-        {
-            render_blocks(stdout, block, &mut new_lines, compressed_rows, start_row);
-        }
-
-        stdout.flush().expect("Ошибка вывода");
-
-        *rendered_lines = new_lines;
-        */
+        return (current_output_area, lines.len());
     }
 
     fn get_state_by_path_mut<'a>(path: &[usize], state: &'a mut[ConsoleOut]) -> &'a mut ConsoleOut
@@ -183,6 +169,8 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         let mut compressed_index: Vec<Vec<usize>> = Vec::with_capacity(16); //Вектора индексов по глубине
         let mut compressed_rows: Vec<Option<u16>> = Vec::with_capacity(64); //Координаты < и V для свёрток
 
+        let mut current_compressed: Option<Vec<usize>> = None;
+
         let mut input: TextArea<'static> = TextArea::default();
         let mut running: bool = true;
 
@@ -193,9 +181,12 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         //Консолька
         let mut terminal: Terminal<CrosstermBackend<Stdout>> = Terminal::new(backend).expect("Не удалось создать терминал Ratatui");
 
-        let mut current_compressed: Option<Vec<usize>> = None;
-
         let mut scroll: u16 = 0;
+        let mut output_area: Rect = Rect::default();
+
+        let mut fall_down: bool = true;
+        let mut lines_count: usize = 0;
+        let mut max_scroll: u16 = 0;
 
         while running
         {
@@ -377,21 +368,34 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
                         {
                             MouseEventKind::ScrollUp =>
                             {
+                                fall_down = false;
+
                                 scroll = scroll.saturating_sub(3);
                             }
 
                             MouseEventKind::ScrollDown =>
                             {
                                 scroll = scroll.saturating_add(3);
+
+                                if scroll >= max_scroll
+                                {
+                                    scroll = max_scroll;
+                                    fall_down = true;
+                                }
                             }
 
                             MouseEventKind::Down(MouseButton::Left) =>
                             {
-                                if let Some(id) = compressed_rows.iter().position(|row| *row == Some(mouse.row))
+                                if mouse.row >= output_area.y && mouse.row < output_area.y + output_area.height
                                 {
-                                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-                                    .send(Out::Toggle(id))
-                                    .expect("Ошибка связи с консолью");
+                                    let clicked_row: u16 = scroll + (mouse.row - output_area.y);
+
+                                    if let Some(id) = compressed_rows.iter().position(|row| *row == Some(clicked_row))
+                                    {
+                                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                                        .send(Out::Toggle(id))
+                                        .expect("Ошибка связи с консолью");
+                                    }
                                 }
                             }
 
@@ -406,7 +410,18 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
             compressed_rows.clear();
             compressed_rows.resize(compressed_index.len(), None);
 
-            render(&mut terminal, &state, &mut compressed_rows, &input, scroll);
+            max_scroll = lines_count.saturating_sub(output_area.height as usize) as u16;
+
+            let (new_output_area, lines_count_new) = render(&mut terminal, &state, &mut compressed_rows, &input, scroll);
+
+            lines_count = lines_count_new;
+
+            output_area = new_output_area;
+
+            if fall_down
+            {
+                scroll = max_scroll;
+            }
         }
 
         disable_raw_mode().expect("Не удалось отключить raw mode");
@@ -636,9 +651,14 @@ async fn main()
         if prompt == "exit"
         {
             break;
-        }
+        } else if prompt == ":_"
+        {
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                .send(Out::Clear)
+                .expect("Ошибка связи с консолью");
 
-        if prompt.is_empty()
+            continue;
+        } else if prompt.is_empty()
         {
             warn!("Пустой запрос даст ошибку");
             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
