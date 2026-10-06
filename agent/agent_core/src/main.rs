@@ -20,6 +20,7 @@ use std::sync::mpsc; //Связь tx-rx меж потоками
 use std::io::{stdout, Stdout, Write}; //Для вывода с crossterm
 
 use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
+use crossterm::cursor::position; //Понять куда тычет
 
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
@@ -49,6 +50,7 @@ enum ConsoleOut
 
 struct CompressedOut
 {
+    id: usize,
     compressed: bool,
     out: Vec<ConsoleOut>,
 }
@@ -65,7 +67,7 @@ enum Out
 
 fn spawn_console_thread() -> thread::JoinHandle<()>
 {
-    fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize)
+    fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize, compressed_rows: &mut [Option<u16>], start_row: u16)
     {
         match block
         {
@@ -78,14 +80,21 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
 
             ConsoleOut::Compressed(block) =>
             {
+                let row: u16 = start_row + *new_lines as u16;
+
+                compressed_rows[block.id] = Some(row);
+
                 if block.compressed
                 {
-                    queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
+                    queue!(stdout, Print("Скрыто "), Print(block.out.len()), Print(" элементов <"), Print('\n')).expect("Ошибка очереди вывода");
                     *new_lines += 1;
                 } else {
+                    queue!(stdout, Print("Раскрыто "), Print(block.out.len()), Print(" элементов V"), Print('\n')).expect("Ошибка очереди вывода");
+                    *new_lines += 1;
+
                     for block in block.out.iter()
                     {
-                        render_blocks(stdout, block, new_lines);
+                        render_blocks(stdout, block, new_lines, compressed_rows, start_row);
                     }
                 }
             }
@@ -93,9 +102,18 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
         
     }
 
-    fn render(stdout: &mut Stdout, blocks: &[ConsoleOut], rendered_lines: &mut usize)
+    fn render(stdout: &mut Stdout, blocks: &[ConsoleOut], rendered_lines: &mut usize, compressed_rows: &mut [Option<u16>])
     {
         let mut new_lines: usize = 0;
+
+        for row in compressed_rows.iter_mut()
+        {
+            *row = None;
+        }
+
+        let (_, cursor_row) = position().expect("Не удалось получить позицию курсора");
+
+        let start_row: u16 = cursor_row.saturating_sub(*rendered_lines as u16);
 
         if *rendered_lines > 0
         {
@@ -104,7 +122,7 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
 
         for block in blocks.iter()
         {
-            render_blocks(stdout, block, &mut new_lines);
+            render_blocks(stdout, block, &mut new_lines, compressed_rows, start_row);
         }
 
         stdout.flush().expect("Ошибка вывода");
@@ -142,7 +160,8 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
     let console_thread: thread::JoinHandle<()> = thread::spawn(move ||
     {
         let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
-        let mut compressed_index: Vec<Vec<usize>> = (0..8).map(|_| Vec::with_capacity(4)).collect(); //Вектора индексов по глубине
+        let mut compressed_index: Vec<Vec<usize>> = Vec::with_capacity(16); //Вектора индексов по глубине
+        let mut compressed_rows: Vec<Option<u16>> = Vec::with_capacity(64); //Координаты < и V для свёрток
 
         let mut stdout: Stdout = stdout(); //Просто без скобок
 
@@ -175,7 +194,7 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
                                 {
                                     new_idx = block.out.len();
 
-                                    block.out.push(ConsoleOut::Compressed( CompressedOut { compressed: true, out: Vec::new() }));
+                                    block.out.push(ConsoleOut::Compressed( CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
                                 }
 
                                 ConsoleOut::Text(_) =>
@@ -192,7 +211,7 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
                         {
                             let new_idx: usize = state.len();
 
-                            state.push(ConsoleOut::Compressed(CompressedOut { compressed: true, out: Vec::new() }));
+                            state.push(ConsoleOut::Compressed(CompressedOut { id: compressed_index.len(), compressed: true, out: Vec::new() }));
                             
                             let path: Vec<usize> = vec![new_idx];
 
@@ -274,7 +293,10 @@ fn spawn_console_thread() -> thread::JoinHandle<()>
                 }
             }
 
-            render(&mut stdout, &state, &mut rendered_lines);
+            compressed_rows.clear();
+            compressed_rows.resize(compressed_index.len(), None);
+
+            render(&mut stdout, &state, &mut rendered_lines, &mut compressed_rows);
         }
     });
 
@@ -293,7 +315,10 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
     for (i, model) in models.data.iter().enumerate()
     {
         info!("№{}: {:?}", i + 1, model.id);
-        println!("№{}: {:?}", i + 1, model.id);
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("№{}: {:?}", i + 1, model.id)))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .expect("Ошибка связи с консолью");
     }
 }
 
@@ -321,8 +346,6 @@ async fn main()
 {
     let time_start: Instant = Instant::now();
 
-    let console_thread: thread::JoinHandle<()> = spawn_console_thread(); //Создать поток
-
     //Логер
     let (loger, _log_guard) = non_blocking(never("./logs", format!("log_{:?}.log", 
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("Времени нет").as_secs())));
@@ -330,7 +353,8 @@ async fn main()
     tracing_subscriber::fmt().with_writer(loger).with_ansi(false).init();
 
     info!("Логер ожил: {:?}", time_start.elapsed());
-    println!("Логер ожил: {:?}", time_start.elapsed());
+    
+    let console_thread: thread::JoinHandle<()> = spawn_console_thread(); //Создать поток
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
@@ -343,12 +367,18 @@ async fn main()
     } else if args_list.len() > 2
     {
         warn!("Обнаружены лишние аргументы:");
-        println!("Обнаружены лишние аргументы:");
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Обнаружены лишние аргументы:")))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .expect("Ошибка связи с консолью");
 
         for elem in args_list.iter().skip(2)
         {
             warn!("{:?}", elem);
-            println!("{:?}", elem);
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("{:?}", elem)))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Ошибка связи с консолью");
         }
     }
 
@@ -423,14 +453,20 @@ async fn main()
     };
 
     info!("Клиент загружен: {:?}", time_start.elapsed());
-    println!("Клиент загружен: {:?}", time_start.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Клиент загружен: {:?}", time_start.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка связи с консолью");
 
     load_py_env(); //Создание Py субботы
 
     load_py_guards(); //Гварды
 
     info!("PyEnv загружен: {:?}", time_start.elapsed());
-    println!("PyEnv загружен: {:?}", time_start.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("PyEnv загружен: {:?}", time_start.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка связи с консолью");
 
     let agent: Agent = agent_builder
     .preamble(SYSTEM_PROMPT) //System prompt
@@ -457,7 +493,10 @@ async fn main()
     .build(); //Builder -> Agent построить короче
 
     info!("Агент готов: {:?}", time_start.elapsed());
-    println!("Агент готов: {:?}", time_start.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Агент готов: {:?}", time_start.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка связи с консолью");
 
     loop //Общение с душевнобольным
     {
@@ -483,6 +522,11 @@ async fn main()
         let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
         let prompt: &str = prompt.trim();
 
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(prompt.to_string()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .expect("Ошибка связи с консолью");
+
         if prompt == "exit"
         {
             break;
@@ -491,14 +535,20 @@ async fn main()
         if prompt.is_empty()
         {
             warn!("Пустой запрос даст ошибку");
-            println!("Пустой запрос даст ошибку");
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Пустой запрос даст ошибку")))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Ошибка связи с консолью");
 
             continue;
         }
 
         let time_prompt: Instant = Instant::now();
 
-        println!("Запрос передан в обработку...");
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Запрос передан в обработку...")))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .expect("Ошибка связи с консолью");
 
         match agent.prompt(prompt).extended_details().await
         {
@@ -507,13 +557,19 @@ async fn main()
                 let response: PromptResponse = response;
 
                 info!("\n{}\n{:#?}\n{:?}", response.output, response.usage, time_prompt.elapsed());
-                println!("{}\n{:?}", response.output, time_prompt.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("{}\n{:?}", response.output, time_prompt.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .expect("Ошибка связи с консолью");
             }
 
             Err(err) =>
             {
                 error!("Ошибка ответа!\n{:?}", err);
-                println!("Ошибка ответа!\n{:?}", err);
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка ответа!\n{:?}", err)))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .expect("Ошибка связи с консолью");
 
                 continue;
             }
@@ -521,16 +577,13 @@ async fn main()
     }
 
     //Закрыть поток консоли
-    CONSOLE_OUT_TX.get().unwrap(/*SAFETY точно инит есть*/).send(Out::Shutdown)
-    .inspect_err(|err| 
-    { error!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed());
-    println!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()); })
+    CONSOLE_OUT_TX.get().expect("Невозможное возможно").send(Out::Shutdown)
+    .inspect_err(|err| error!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
     //Подтянуть её поток
-    console_thread.join().inspect_err(|err|
-    { error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed());
-    println!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed())} )
+    console_thread.join()
+    .inspect_err(|err| error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка присоединения потока консили");
 
     info!("{:?}", time_start.elapsed());
