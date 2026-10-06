@@ -114,6 +114,11 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
         .expect("Ошибка связи с консолью");
 
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
         return Err(ToolExecutionError::permission_denied(verdict.reason)); //Нельзя
     }
 
@@ -159,6 +164,11 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
             .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
             .expect("Ошибка связи с консолью");
 
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
             return Err(ToolExecutionError::not_found(format!("Module {:?} with tool {:?} is missing", request.module, request.function)));
         }
     };
@@ -185,6 +195,11 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                     Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
                     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
                     .expect("Ошибка связи с консолью");
+
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::CompressedEnd)
+                    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+                    .expect("Ошибка связи с консолью");
                 }
                 
                 Err(_) => 
@@ -192,6 +207,11 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                     error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); 
                     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                     Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed())))
+                    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+                    .expect("Ошибка связи с консолью");
+
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::CompressedEnd)
                     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
                     .expect("Ошибка связи с консолью");
                 }
