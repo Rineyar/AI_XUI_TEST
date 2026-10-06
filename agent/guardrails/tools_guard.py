@@ -148,11 +148,11 @@ def _host_is_local(hostname: str)->bool:
         return False
 
     return (
-        ip.is_loopback          # 127.0.0.0/8, ::1
-        or ip.is_private        # RFC1918 + другие приватные
-        or ip.is_link_local     # 169.254.0.0/16, fe80::/10
-        or ip.is_unspecified    # 0.0.0.0, ::
-        or ip.is_reserved       # зарезервированные
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_unspecified
+        or ip.is_reserved
     )
 
 def _guard_run_nuclei(args):
