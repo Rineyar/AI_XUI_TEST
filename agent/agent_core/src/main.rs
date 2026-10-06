@@ -23,6 +23,8 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard}; //Общение меж пото
 use crossterm::{cursor::{MoveUp, MoveToColumn}, queue, style::Print, terminal::{Clear, ClearType}}; //А это и есть вывод
 use crossterm::{cursor::position}; //Понять куда тычет
 
+use ratatui::{backend::CrosstermBackend, text::{Line, Text}, widgets::Paragraph, Terminal}; //Новый вывод
+
 use dotenvy::dotenv; //Крейт для удобного чтения .env;
 
 use tracing_appender::{rolling::never, non_blocking}; //Логи
@@ -66,36 +68,35 @@ enum Out
     Shutdown
 }
 
-fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> thread::JoinHandle<()>
+fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -> thread::JoinHandle<()>
 {
-    fn render_blocks(stdout: &mut Stdout, block: &ConsoleOut, new_lines: &mut usize, compressed_rows: &mut [Option<u16>], start_row: u16)
+    fn render_blocks(block: &ConsoleOut, lines: &mut Vec<Line<'static>>, compressed_rows: &mut [Option<u16>])
     {
         match block
         {
             ConsoleOut::Text(text) =>
             {
-                *new_lines += text.matches('\n').count();
-                queue!(stdout, Print(text), Print('\n')).expect("Ошибка очереди вывода");
-                *new_lines += 1;
+                for line in text.lines()
+                {
+                    lines.push(Line::from(line.to_string()));
+                }
             }
 
             ConsoleOut::Compressed(block) =>
             {
-                let row: u16 = start_row + *new_lines as u16;
+                let row: u16 = lines.len() as u16;
 
                 compressed_rows[block.id] = Some(row);
 
                 if block.compressed
                 {
-                    queue!(stdout, Print(block.id), Print(":> Скрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
-                    *new_lines += 1;
+                    lines.push(Line::from(format!("{}:> Скрыто {} элементов", block.id, block.out.len())));
                 } else {
-                    queue!(stdout, Print(block.id), Print(":V Раскрыто "), Print(block.out.len()), Print(" элементов"), Print('\n')).expect("Ошибка очереди вывода");
-                    *new_lines += 1;
+                    lines.push(Line::from(format!("{}:V Раскрыто {} элементов", block.id, block.out.len())));
 
-                    for block in block.out.iter()
+                    for next_block in block.out.iter()
                     {
-                        render_blocks(stdout, block, new_lines, compressed_rows, start_row);
+                        render_blocks(next_block, lines, compressed_rows);
                     }
                 }
             }
@@ -103,15 +104,30 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
         
     }
 
-    fn render(stdout: &mut Stdout, blocks: &[ConsoleOut], rendered_lines: &mut usize, compressed_rows: &mut [Option<u16>])
+    fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, blocks: &[ConsoleOut], compressed_rows: &mut [Option<u16>])
     {
-        let mut new_lines: usize = 0;
+        let mut lines: Vec<Line<'static>> = Vec::with_capacity(16);
 
         for row in compressed_rows.iter_mut()
         {
             *row = None;
         }
 
+        for block in blocks.iter()
+        {
+            render_blocks(block, &mut lines, compressed_rows);
+        }
+
+        terminal.draw(|frame|
+        {
+            let area = frame.area();
+
+            let paragraph = Paragraph::new(lines);
+
+            frame.render_widget(paragraph, area);
+        }).expect("Ошибка отрисовки Ratatui");
+
+        /*
         let (_, cursor_row) = position().expect("Не удалось получить позицию курсора");
 
         let start_row: u16 = cursor_row.saturating_sub(*rendered_lines as u16);
@@ -129,6 +145,7 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
         stdout.flush().expect("Ошибка вывода");
 
         *rendered_lines = new_lines;
+        */
     }
 
     fn get_state_by_path_mut<'a>(path: &[usize], state: &'a mut[ConsoleOut]) -> &'a mut ConsoleOut
@@ -162,12 +179,14 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
     {
         let mut state: Vec<ConsoleOut> = Vec::with_capacity(128); //Вектор условно строк
         let mut compressed_index: Vec<Vec<usize>> = Vec::with_capacity(16); //Вектора индексов по глубине
+        let mut compressed_rows: Vec<Option<u16>> = Vec::with_capacity(64); //Координаты < и V для свёрток
 
-        let mut stdout: Stdout = stdout(); //Просто без скобок
+        let backend: CrosstermBackend<Stdout> = CrosstermBackend::new(stdout()); //Связь с cross
+
+        //Консолька
+        let mut terminal: Terminal<CrosstermBackend<Stdout>> = Terminal::new(backend).expect("Не удалось создать терминал Ratatui");
 
         let mut current_compressed: Option<Vec<usize>> = None;
-
-        let mut rendered_lines: usize = 0; //Сколько линий есть
 
         while let Ok(event) = rx.recv()
         {
@@ -307,11 +326,10 @@ fn spawn_console_thread(compressed_rows: Arc<RwLock<Vec<Option<u16>>>>) -> threa
                 }
             }
 
-            let mut lock: RwLockWriteGuard<'_, Vec<Option<u16>>> = compressed_rows.write().expect("");
-            lock.clear();
-            lock.resize(compressed_index.len(), None);
+            compressed_rows.clear();
+            compressed_rows.resize(compressed_index.len(), None);
 
-            render(&mut stdout, &state, &mut rendered_lines, &mut lock);
+            render(&mut terminal, &state, &mut compressed_rows);
         }
     });
 
@@ -369,10 +387,10 @@ async fn main()
 
     info!("Логер ожил: {:?}", time_start.elapsed());
 
-    let compressed_rows: Arc<RwLock<Vec<Option<u16>>>> = Arc::new(RwLock::new(Vec::with_capacity(64))); //Координаты < и V для свёрток
+    let (prompt_tx, mut prompt_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     //Создать потоки
-    let console_thread: thread::JoinHandle<()> = spawn_console_thread(Arc::clone(&compressed_rows));
+    let console_thread: thread::JoinHandle<()> = spawn_console_thread(prompt_tx);
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
@@ -516,30 +534,15 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    let mut buffer: Vec<u8> = Vec::with_capacity(128);
-
     loop //Общение с душевнобольным
     {
-        buffer.clear();
-
-        match stdin().lock().read_until(b'\n', &mut buffer)
+        let prompt: String = match prompt_rx.recv().await
         {
-            Ok(bytes) =>
-            {
-                if bytes == 0
-                {
-                    break;
-                }
-            }
+            Some(prompt) => prompt,
 
-            Err(err) =>
-            {
-                error!("Запрос не считан!\n{:?}", err);
-                break;
-            }
+            None => break,
         };
 
-        let prompt: Cow<'_, str> = String::from_utf8_lossy(&buffer);
         let prompt: &str = prompt.trim();
 
         info!("Запрос - {}\t|\t{:?}", prompt, time_start.elapsed());
