@@ -15,6 +15,7 @@ services:
 
     volumes:
       - ./agent/logs:/agent/logs
-      
+    #  - ./agent/logs/selfanalysys.md:/agent/workspace/selfanalysys.md      
+
     stdin_open: true
     tty: true
