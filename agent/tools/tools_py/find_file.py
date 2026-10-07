@@ -1,4 +1,6 @@
 import glob
+import files
+
 __all__ = ["find_files"]
 
 __tool_meta__ = {
