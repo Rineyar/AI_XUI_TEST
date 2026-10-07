@@ -427,9 +427,28 @@ fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String>) -
         disable_raw_mode().expect("Не удалось отключить raw mode");
         execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen).expect("Не удалось восстановить терминал");
         terminal.show_cursor().expect("Не удалось вернуть курсор");
+
+        let _terminal_guard: TerminalGuard = TerminalGuard;
     });
 
     return console_thread_writer;
+}
+
+struct TerminalGuard;
+
+impl Drop for TerminalGuard
+{
+    fn drop(&mut self)
+    {
+        restore_terminal();
+    }
+}
+
+fn restore_terminal()
+{
+    let _ = disable_raw_mode();
+
+    let _ = execute!(stdout(), DisableMouseCapture, LeaveAlternateScreen);
 }
 
 async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
@@ -474,6 +493,14 @@ async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Ins
 async fn main()
 {
     let time_start: Instant = Instant::now();
+
+    //Чтобы при вылете терминал отпустил
+    let default_panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info|
+    {
+        restore_terminal();
+        default_panic(info);
+    }));
 
     //Логер
     let (loger, _log_guard) = non_blocking(never("./logs", format!("log_{:?}.log", 
