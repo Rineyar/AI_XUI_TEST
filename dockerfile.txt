@@ -28,7 +28,13 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     cargo build --release \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
-#Запуск
+# Сборка nuclei
+FROM golang:1.24-alpine AS nuclei-builder
+RUN apk add --no-cache git
+RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.3.5
+
+
+#Запуск агента
 FROM python:3.13-slim-trixie
 
 #Имя
@@ -38,12 +44,29 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
+ENV NUCLEI_TEMPLATES_PATH=/agent/tools/nuclei-templates
 
 #Добавить необходимые библиотеки питону
 RUN pip install --no-cache-dir requests bandit semgrep
 
+# Установка пакетов для загрузки по http и распаковки zip архивов
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Nuclei с доступом из path
+COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
+
 #Рабочая область
 WORKDIR /agent
+
+# Загрузка шаблонов Nuclei (в tools?????)
+RUN wget -q https://github.com/projectdiscovery/nuclei-templates/archive/refs/heads/main.zip -O /tmp/templates.zip \
+    && unzip -q /tmp/templates.zip -d /agent/tools/ \
+    && mv /agent/tools/nuclei-templates-main /agent/tools/nuclei-templates \
+    && rm /tmp/templates.zip
 
 #Изолятор
 RUN mkdir -p /agent/workspace

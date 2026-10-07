@@ -14,11 +14,10 @@ ALLOWED_TOOLS = {
     "find_files",
     "directory_contents",
     "run_bandit",
-    "run_semgrep",
-    #"run_nuclei",
-    #"run_zap"
+    "run_semgrep"
 }
 
 TOOLS_IN_TEST = {
-
+    "run_nuclei",
+    "run_zap"
 }

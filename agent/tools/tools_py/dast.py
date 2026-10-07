@@ -1,7 +1,5 @@
 import subprocess
 import json
-import json
-import subprocess
 import time
 import requests
 
