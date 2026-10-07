@@ -315,30 +315,30 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
 }
 */
 
-#[rig_tool(
-    name = "find_files",
-    description = "Recursively find files and directories in the workspace that match a glob pattern.",
-    params(
-        pattern = "Glob pattern to match file or directory names, for example '*.py' or 'config*'.",
-        path = "Directory to search from, relative to the workspace."
-    )
-)]
-pub async fn find_files(pattern: String, path: Option<String>) -> Result<String, ToolExecutionError>
-{
-    let mut args: Map<String, Value> = Map::with_capacity(2);
-
-    insert_arg(&mut args, "pattern", Some(pattern));
-    insert_arg(&mut args, "path", path);
-
-    //Вызов
-    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
-
-    //Сбор результата
-    return Python::attach(|py: Python<'_>|
-    {
-        res.extract::<String>(py) //Принят return как String
-    }).map_err(ToolExecutionError::from_error);
-}
+// #[rig_tool(
+//     name = "find_files",
+//     description = "Recursively find files and directories in the workspace that match a glob pattern.",
+//     params(
+//         pattern = "Glob pattern to match file or directory names, for example '*.py' or 'config*'.",
+//         path = "Directory to search from, relative to the workspace."
+//     )
+// )]
+// pub async fn find_files(pattern: String, path: Option<String>) -> Result<String, ToolExecutionError>
+// {
+//     let mut args: Map<String, Value> = Map::with_capacity(2);
+//
+//     insert_arg(&mut args, "pattern", Some(pattern));
+//     insert_arg(&mut args, "path", path);
+//
+//     //Вызов
+//     let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
+//
+//     //Сбор результата
+//     return Python::attach(|py: Python<'_>|
+//     {
+//         res.extract::<String>(py) //Принят return как String
+//     }).map_err(ToolExecutionError::from_error);
+// }
 
 #[rig_tool(
     name = "directory_contents",

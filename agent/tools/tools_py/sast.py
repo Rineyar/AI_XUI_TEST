@@ -1,5 +1,6 @@
 import json
 import subprocess
+import files
 from bandit.core import config as b_config
 from bandit.core import manager as b_manager
 
@@ -14,7 +15,7 @@ __tool_meta__ = {
     }
 }
 
-def run_bandit(*, targets: list = ["."], 
+def run_bandit(*, targets: list = [""],
                recursive: bool = True,
                config_file: str | None = None, 
                agg_type: str = "vuln",
@@ -28,8 +29,11 @@ def run_bandit(*, targets: list = ["."],
         "output" : "",
         "error" : ""
     }
-
     try:
+
+        targets = [str(files.resolve_projects_path(target)) for target in targets]
+        if config_file:
+            config_file = str(files.resolve_projects_path(config_file))
         # Создаем конфигурация
         bc = b_config.BanditConfig(config_file)
         # Создаем менеджер
@@ -57,7 +61,8 @@ def run_bandit(*, targets: list = ["."],
         output["error"] = f"Exception: {e}"
 
 
-    return json.dumps(output, indent=4, ensure_ascii=False)
+    response = json.dumps(output, indent=4, ensure_ascii=False)
+    return files.remove_project_path(response)
 
 def run_semgrep(*, targets: list = ["."], 
                 configs: list = list(), 
@@ -76,6 +81,16 @@ def run_semgrep(*, targets: list = ["."],
     }
 
     try:
+        targets = [str(files.resolve_projects_path(target)) for target in targets]
+        resolved_configs = []
+        for config in configs:
+            if config.startswith("p/"):
+                resolved_configs.append(config)
+            else:
+                resolved_configs.append(str(files.resolve_projects_path(config)))
+
+        configs = resolved_configs
+
         # создаем команду
         cmd = ["semgrep", "scan", "--json", "--quiet", 
                "--metrics=off", f"--timeout={timeout}"] 
@@ -100,8 +115,10 @@ def run_semgrep(*, targets: list = ["."],
     except Exception as e:
         output["error"] = f"Exception: {e}"
 
-    return json.dumps(output, indent=4, ensure_ascii=False)
-    
+    response = json.dumps(output, indent=4, ensure_ascii=False)
+    return files.remove_project_path(response)
+
+
 if __name__ == "__main__":
     # print(run_bandit())
     print(run_semgrep(configs=["p/python", "p/rust"]))
