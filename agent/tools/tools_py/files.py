@@ -18,10 +18,25 @@ __tool_meta__ = {
     },
 }
 
-WORKSPACE = Path("./workspace").resolve()
+PROJECTS_PATH = Path(os.getenv("CONTAINER_PROJECTS_ROOT", "/projects")).resolve()
+PROJECT_PATH = (PROJECTS_PATH / os.environ["TARGET_PROJECT_NAME"]).resolve()
 
 
-def _resolve_workspace_path(filename: str) -> Path:
+def remove_project_path(response: str) -> str:
+    """Убирает путь к проекту из уже сформированного ответа инструмента."""
+    result = response
+    project_path = str(PROJECT_PATH)
+
+    for path in {project_path, project_path.replace("\\", "/"), project_path.replace("/", "\\")}:
+        for prefix in {path, path.replace("\\", "\\\\")}:
+            result = result.replace(f"{prefix}/", "")
+            result = result.replace(f"{prefix}\\", "")
+            result = result.replace(prefix, ".")
+
+    return result
+
+
+def resolve_projects_path(filename: str) -> Path:
     """
     Приводит любой переданный путь (как 'test.py', так и 'workspace/test.py'
     или './workspace/test.py') к абсолютному пути внутри папки workspace.
@@ -36,25 +51,26 @@ def _resolve_workspace_path(filename: str) -> Path:
         parts = parts[1:]
 
     clean_rel = Path(*parts) if parts else Path(".")
-    return (WORKSPACE / clean_rel).resolve()
+    return (PROJECT_PATH / clean_rel).resolve()
 
 
 def find_files(*, pattern: str, path: str = ".") -> str:
-    base = _resolve_workspace_path(path)
+    base = resolve_projects_path(path)
     matches = glob.glob(f"{base}/**/{pattern}", recursive=True)
     unique = sorted(set(matches))
-    return "\n".join(unique) if unique else "(no matches)"
+    response = "\n".join(unique) if unique else "(no matches)"
+    return remove_project_path(response)
 
 
 def read_file(*, filename):
     #В будущем сделать errors="replace" и бинарное чтение. Всё 3 разные функции
-    path = _resolve_workspace_path(filename)
+    path = resolve_projects_path(filename)
     with open(path, "r", encoding="utf-8", errors="replace") as file:
         return file.read()
 
 
 def write_file(*, filename, text):
-    path = _resolve_workspace_path(filename)
+    path = resolve_projects_path(filename)
     # Создаем родительские подпапки, если их еще нет
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as file:

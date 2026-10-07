@@ -8,3 +8,4 @@ Cargo.lock
 *.rar
 */workspace
 .idea
+/agent/tools/tools_py/__pycache__

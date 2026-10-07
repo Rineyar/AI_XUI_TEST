@@ -9,8 +9,8 @@ def check_path(path, *, directory=None):
 
     try:
         # Резолвим относительно WORKSPACE!
-        target = (policy.WORKSPACE / requested).resolve(strict=True)
-        target.relative_to(policy.WORKSPACE)
+        target = (policy.PROJECT_PATH / requested).resolve(strict=True)
+        target.relative_to(policy.PROJECT_PATH)
     except Exception as error:
         raise ValueError("Путь не существует или выходит за пределы проекта") from error
 
@@ -31,10 +31,10 @@ def check_write_path(path):
 
     try:
         # Резолвим относительно WORKSPACE!
-        target = (policy.WORKSPACE / requested).resolve(strict=False)
-        target.relative_to(policy.WORKSPACE)
+        target = (policy.PROJECT_PATH / requested).resolve(strict=False)
+        target.relative_to(policy.PROJECT_PATH)
         parent = target.parent.resolve(strict=True)
-        parent.relative_to(policy.WORKSPACE)
+        parent.relative_to(policy.PROJECT_PATH)
     except Exception as error:
         raise ValueError("Path does not exist or is out side of workspace") from error
 
