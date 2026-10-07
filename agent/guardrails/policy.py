@@ -29,9 +29,10 @@ ALLOWED_TOOLS = {
     "directory_contents",
     "run_bandit",
     "run_semgrep",
+    #"run_nuclei",
+    #"run_zap"
 }
 
 TOOLS_IN_TEST = {
-    "run_nuclei",
-    "run_zap"
+
 }

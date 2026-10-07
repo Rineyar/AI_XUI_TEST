@@ -4,7 +4,19 @@ import os
 import glob
 from pathlib import Path
 
-__all__ = ["read_file", "write_file", "run_file", "find_files"]
+__all__ = ["read_file", "write_file", "find_files"]
+
+__tool_meta__ = {
+    "read_file": {
+        "description": "Reads a text file from the workspace."
+    },
+    "write_file": {
+            "description": "Writes text to a file in the workspace."
+    },
+    "find_files": {
+            "description": "Searches for files by glob pattern inside the workspace."
+    },
+}
 
 PROJECTS_PATH = Path(os.getenv("CONTAINER_PROJECTS_ROOT", "/projects")).resolve()
 PROJECT_PATH = (PROJECTS_PATH / os.environ["TARGET_PROJECT_NAME"]).resolve()
@@ -64,12 +76,11 @@ def write_file(*, filename, text):
     with open(path, "w", encoding="utf-8") as file:
         file.write(text)
 
-
-'''
-path - путь к исполняемому файлу относительно папки agent
-args - аргументы запускаемой программы в формате list
-'''
 def run_file(*, path, args=None):
+    '''
+    path - путь к исполняемому файлу относительно папки agent
+    args - аргументы запускаемой программы в формате list
+    '''
     output = {
         "success": False,
         "output": "",
@@ -78,7 +89,7 @@ def run_file(*, path, args=None):
     if args is None:
         args = []
     try:
-        full_path = os.path.join("./agent", path)
+        full_path = _resolve_workspace_path(path)
         proc = subprocess.run(
             [full_path] + args,
             capture_output=True,
