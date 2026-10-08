@@ -10,14 +10,14 @@ services:
     env_file:
       - .env
 
-    volumes:
-      - type: bind
-        source: ${PROJECTS_ROOT}
-        target: /projects
+    # volumes:
+    #   - type: bind
+    #     source: ${PROJECTS_ROOT}
+    #     target: /projects
 
-    networks:
-      - scan-network
-      - llm-network
+    # networks:
+    #   - scan-network
+    #   - llm-network
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -29,10 +29,10 @@ services:
     stdin_open: true
     tty: true
 
-networks:
-  scan-network:
-    driver: bridge
-    internal: true
+# networks:
+#   scan-network:
+#     driver: bridge
+#     internal: true
 
-  llm-network:
-    driver: bridge
+#   llm-network:
+#     driver: bridge
