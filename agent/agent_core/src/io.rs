@@ -274,7 +274,7 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                             {
                                 warn!("id блока не существует");
                                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                                Out::Text(format!("id блока не существует")))
+                                Out::Text(String::from("id блока не существует")))
                                 .inspect_err(|err| error!("\nОшибка связи с консолью - {}", err))
                                 .expect("Ошибка связи с консолью");
 
@@ -361,18 +361,15 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                                 }
                             }
 
-                            MouseEventKind::Down(MouseButton::Left) =>
+                            MouseEventKind::Down(MouseButton::Left) if mouse.row >= output_area.y && mouse.row < output_area.y + output_area.height =>
                             {
-                                if mouse.row >= output_area.y && mouse.row < output_area.y + output_area.height
-                                {
-                                    let clicked_row: u16 = scroll + (mouse.row - output_area.y);
+                                let clicked_row: u16 = scroll + (mouse.row - output_area.y);
 
-                                    if let Some(id) = compressed_rows.iter().position(|row| *row == Some(clicked_row))
-                                    {
-                                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-                                        .send(Out::Toggle(id))
-                                        .expect("Ошибка связи с консолью");
-                                    }
+                                if let Some(id) = compressed_rows.iter().position(|row| *row == Some(clicked_row))
+                                {
+                                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                                    .send(Out::Toggle(id))
+                                    .expect("Ошибка связи с консолью");
                                 }
                             }
 

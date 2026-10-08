@@ -88,7 +88,7 @@ async fn main()
     {
         warn!("Обнаружены лишние аргументы:");
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-        Out::Text(format!("Обнаружены лишние аргументы:")))
+        Out::Text(String::from("Обнаружены лишние аргументы:")))
         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
@@ -250,7 +250,7 @@ async fn main()
         {
             warn!("Пустой запрос даст ошибку");
             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::Text(format!("Пустой запрос даст ошибку")))
+            Out::Text(String::from("Пустой запрос даст ошибку")))
             .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Ошибка связи с консолью");
 
@@ -260,7 +260,7 @@ async fn main()
         let time_prompt: Instant = Instant::now();
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-        Out::Text(format!("Запрос передан в обработку...")))
+        Out::Text(String::from("Запрос передан в обработку...")))
         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
