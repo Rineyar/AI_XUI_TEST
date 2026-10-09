@@ -194,11 +194,6 @@ async fn main()
     .context(MAIN_SKILLS)
     .context(SAST_SKILLS)
     .context(DAST_SKILLS)
-    /* Не требуются более
-    .tool(ToolSumI32) //Инструмент добавили
-    .tool(ToolSumI64)
-    .tool(ToolSubI64)
-    */
     .tool(RunZap)
     .tool(RunNuclei)
     .tool(ReadFile)

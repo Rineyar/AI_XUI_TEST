@@ -26,60 +26,6 @@ pub struct ToolRequest
     pub args: Value
 }
 
-/*
-//Макрос для обёртки функции в инструмент
-#[rig_tool(description = "Add two signed 32-bit integers. Both operands AND their mathematical sum must fit in signed 32-bit range.")]
-pub async fn tool_sum_i32(a: i32, b: i32) -> Result<i32, ToolExecutionError> 
-{
-    match a.checked_add(b)
-    {
-        Some(res) =>
-        {
-            return Ok(res);
-        }
-
-        None =>
-        {
-            return Err(ToolExecutionError::invalid_args("Signed i32 overflow: a + b must be between -2147483648 and 2147483647. Choose different operands."));
-        }
-    }
-}
-
-#[rig_tool(description = "Add two signed 64-bit integers. Both operands AND their mathematical sum must fit in signed 64-bit range.")]
-pub async fn tool_sum_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError> 
-{
-    match a.checked_add(b)
-    {
-        Some(res) =>
-        {
-            return Ok(res);
-        }
-
-        None =>
-        {
-            return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
-        }
-    }
-}
-
-#[rig_tool(description = "Sub two signed 64-bit integers. Both operands AND their mathematical subtract must fit in signed 64-bit range.")]
-pub async fn tool_sub_i64(a: i64, b: i64) -> Result<i64, ToolExecutionError> 
-{
-    match a.checked_sub(b)
-    {
-        Some(res) =>
-        {
-            return Ok(res);
-        }
-
-        None =>
-        {
-            return Err(ToolExecutionError::invalid_args("Signed i64 overflow"));
-        }
-    }
-}
-*/
-
 //Вставляет арг, или ничего, чтобы пыхтун не умирал
 fn insert_arg<T: Serialize>(args: &mut Map<String, Value>, key: &str, value: Option<T>)
 {
