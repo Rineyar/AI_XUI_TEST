@@ -31,6 +31,9 @@ mod guards; //Гварды
 mod io; //Консоль
 use io::*;
 
+mod container; //Для DinD
+use container::*;
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -77,6 +80,8 @@ async fn main()
     let console_thread: thread::JoinHandle<()> = spawn_console_thread(prompt_tx);
 
     dotenv().ok(); //Чтобы он мог .env подсосать
+
+    init_sandbox_manager(&time_start).await; //Изолятор
 
     let mut args_list: Vec<String> = args().collect();
 
@@ -204,6 +209,13 @@ async fn main()
     .tool(DirectoryContents)
     .tool(RunBandit)
     .tool(RunSemgrep)
+    .tool(CreateContainer)
+    .tool(RemoveContainer)
+    .tool(ExecuteCommand)
+    .tool(SendPath)
+    .tool(SendText)
+    .tool(DownloadPath)
+    .tool(ReadContainerFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
