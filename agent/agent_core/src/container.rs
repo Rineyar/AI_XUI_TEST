@@ -7,7 +7,9 @@ use bollard::body_full; //Для упаковки вектора в хз даж�
 use bollard::query_parameters::{DownloadFromContainerOptions, DownloadFromContainerOptionsBuilder}; //Загрузка оттуда
 use futures_util::TryStreamExt; //Для сбора хз чего в вектор
 use bollard::exec::{CreateExecOptions, CreateExecResults, StartExecResults}; //Исполнение
-use bollard::plugin::ExecInspectResponse;
+use bollard::plugin::ExecInspectResponse; //Проверка статуса исполнения команды
+use bollard::query_parameters::CreateImageOptionsBuilder; //Скачивание образа конта
+use bollard::query_parameters::CreateImageOptions;
 
 use std::{sync::OnceLock, time::Instant};
 use std::sync::{Mutex, MutexGuard};
@@ -16,6 +18,8 @@ use std::collections::HashSet;
 use tracing::{error, info, warn}; //Макросы логирования
 
 type SandboxResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>; //Господи господи прости
+
+const IMAGE: &str = "alpine:3.22";
 
 static SANDBOX_MANAGER: OnceLock<SandboxManager> = OnceLock::new();
 
@@ -35,6 +39,31 @@ pub async fn init_sandbox_manager(time: &Instant)
     info!("Проверка соединения - {}\t|\t{:?}", docker.ping().await
     .inspect_err(|err| error!("Отсутствует соединение с Docker - {}\t|\t{:?}", err, time.elapsed()))
     .expect("Отсутствует соединение с Docker"), time.elapsed());
+
+    match docker.inspect_image(IMAGE).await
+    {
+        Ok(_) => info!("Шаблон контейнера {} уже есть", IMAGE),
+
+        Err(bollard::errors::Error::DockerResponseServerError { status_code: 404, .. }) =>
+        {
+            warn!("Шаблон контейнера {:?} Не обнаружен. Загрузка...", IMAGE);
+
+            let options: CreateImageOptions = CreateImageOptionsBuilder::new().from_image(IMAGE).build();
+
+            docker.create_image(Some(options), None, None)
+            .try_collect::<Vec<_>>().await
+            .inspect_err(|err| error!("Ошибка загрузки контейнера {:?}: {:?}\t|\t{:?}", IMAGE, err, time.elapsed()))
+            .expect("Ошибка загрузки контейнера");
+
+            info!("Шаблон контейнера {:?} загружен", IMAGE);
+        },
+
+        Err(err) => 
+        {
+            error!("Ошибка загрузки контейнера - {:?}\t|\t{:?}", err, time.elapsed());
+            panic!("Ошибка загрузки контейнера - {:?}", err);
+        }
+    }
 
     SANDBOX_MANAGER.set(SandboxManager { docker, containers: Mutex::new(HashSet::with_capacity(2)) })
     .inspect_err(|err| error!("Невозможное - {:?}\t|\t{:?}", err, time.elapsed()))
