@@ -22,7 +22,7 @@ pub static FULL_PROMPT: &str = concat!(
 */
 
 //Максимум вывовов модели
-pub const MAX_LLM_CALLS: usize = 64;
+pub const MAX_LLM_CALLS: usize = 200;
 
 //Ссылка на местную модель
 pub static MODEL_SERVER_URL: &str = "https://deepcode.ci.nsu.ru/api";
