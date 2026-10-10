@@ -233,9 +233,9 @@ pub async fn send_path(id: String, local_path: String, remote_path: String) -> R
 
     if source.is_dir()
     {
-        archive.append_dir_all(&filename, &source).map_err(|err| ToolExecutionError::other(format!("Failed to archive directory: {:?}", err)))?;
+        archive.append_dir_all(filename, &source).map_err(|err| ToolExecutionError::other(format!("Failed to archive directory: {:?}", err)))?;
     } else {
-        archive.append_path_with_name(&source, &filename).map_err(|err| ToolExecutionError::other(format!("Failed to archive file: {:?}", err)))?;
+        archive.append_path_with_name(&source, filename).map_err(|err| ToolExecutionError::other(format!("Failed to archive file: {:?}", err)))?;
     }
 
     let files: Vec<u8> = archive.into_inner().map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
