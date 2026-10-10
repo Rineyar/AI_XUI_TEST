@@ -23,6 +23,7 @@ tui-textarea = { package = "tui-textarea-2", version = "0.13" }
 bollard = { version = "0.21.1", features = ["ssl"] }
 rustls = { version = "0.23", features = ["aws_lc_rs"] }
 futures-util = "0.3.34"
+tar = "0.4.46"
 
 [lints.clippy]
 needless_return = "allow"
