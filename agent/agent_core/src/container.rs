@@ -15,6 +15,8 @@ use std::collections::HashSet;
 
 use tracing::{error, info, warn}; //Макросы логирования
 
+type SandboxResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>; //Господи господи прости
+
 static SANDBOX_MANAGER: OnceLock<SandboxManager> = OnceLock::new();
 
 #[derive(Debug)]
@@ -39,7 +41,7 @@ pub async fn init_sandbox_manager(time: &Instant)
     .expect("Невозможное");
 }
 
-pub async fn create_container() -> Result<String, bollard::errors::Error>
+pub async fn create_container() -> SandboxResult<String>
 {
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
@@ -57,6 +59,9 @@ pub async fn create_container() -> Result<String, bollard::errors::Error>
         warn!("{}", warn);
     }
 
+    manager.docker.start_container(&id, None).await
+    .inspect_err(|err| error!("Ошибка запуска созданного контейнера - {:?}", err))?;
+
     {
         let mut mutex_guard: MutexGuard<'_, HashSet<String>> = manager.containers.lock()
         .inspect_err(|err| error!("Ошибка Mutex - {:?}", err)).expect("Ошибка Mutex");
@@ -64,14 +69,17 @@ pub async fn create_container() -> Result<String, bollard::errors::Error>
         if !mutex_guard.insert(id.clone())
         {
             //return Err();
-            panic!("Какого-то Х 2 одинаковых id контейнера - {:?}\n", id);
+
+            //panic!("Какого-то Х 2 одинаковых id контейнера - {:?}\n", id);
+
+            return Err(format!("In container creation getted a currently existed id - {:?}", id).into());
         }
     }
 
     return Ok(id);
 }
 
-pub async fn remove_container(id: &str) -> Result<(), bollard::errors::Error>
+pub async fn remove_container(id: &str) -> SandboxResult<()>
 {
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
@@ -82,9 +90,9 @@ pub async fn remove_container(id: &str) -> Result<(), bollard::errors::Error>
 
         if !mutex_guard.contains(id)
         {
-            //return Err();
+            warn!("Попытка удалить несуществующий контейнер - {:?}\n", id);
 
-            panic!("Попытка удалить несуществующий контейнер - {:?}\n", id);
+            return Err(format!("Container {:?} not found", id).into());
         }
     }
 
@@ -103,7 +111,7 @@ pub async fn remove_container(id: &str) -> Result<(), bollard::errors::Error>
     return Ok(());
 }
 
-pub async fn send_data(id: &str, path: &str, files: Vec<u8>) -> Result<(), bollard::errors::Error>
+pub async fn send_data(id: &str, path: &str, files: Vec<u8>) -> SandboxResult<()>
 {
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
@@ -114,9 +122,9 @@ pub async fn send_data(id: &str, path: &str, files: Vec<u8>) -> Result<(), bolla
 
         if !mutex_guard.contains(id)
         {
-            //return Err();
+            warn!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
 
-            panic!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
+            return Err(format!("Container {:?} not found", id).into());
         }
     }
 
@@ -130,7 +138,7 @@ pub async fn send_data(id: &str, path: &str, files: Vec<u8>) -> Result<(), bolla
     return Ok(());
 }
 
-pub async fn load_data(id: &str, path: &str) -> Result<Vec<u8>, bollard::errors::Error>
+pub async fn load_data(id: &str, path: &str) -> SandboxResult<Vec<u8>>
 {
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
@@ -141,9 +149,9 @@ pub async fn load_data(id: &str, path: &str) -> Result<Vec<u8>, bollard::errors:
 
         if !mutex_guard.contains(id)
         {
-            //return Err();
+            warn!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
 
-            panic!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
+            return Err(format!("Container {:?} not found", id).into());
         }
     }
 
@@ -161,7 +169,7 @@ pub async fn load_data(id: &str, path: &str) -> Result<Vec<u8>, bollard::errors:
     return Ok(loaded);
 }
 
-pub async fn execute_command(id: &str, command: &str) -> Result<(String, Option<i64>), bollard::errors::Error>
+pub async fn execute_command(id: &str, command: &str) -> SandboxResult<(String, Option<i64>)>
 {
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
@@ -172,9 +180,9 @@ pub async fn execute_command(id: &str, command: &str) -> Result<(String, Option<
 
         if !mutex_guard.contains(id)
         {
-            //return Err();
+            warn!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
 
-            panic!("Попытка получить доступ к несуществующему контейнеру - {:?}\n", id);
+            return Err(format!("Container {:?} not found", id).into());
         }
     }
 
@@ -184,9 +192,6 @@ pub async fn execute_command(id: &str, command: &str) -> Result<(String, Option<
 
     let exec: CreateExecResults = manager.docker.create_exec(id, options).await
     .inspect_err(|err| error!("Ошибка передачи файлов в контейнер - {:?}", err))?;
-
-    let status: ExecInspectResponse = manager.docker.inspect_exec(&exec.id).await?;
-    info!("Exit code: {:?}", status.exit_code);
 
     let result: StartExecResults = manager.docker.start_exec(&exec.id, None).await?;
 
@@ -200,6 +205,9 @@ pub async fn execute_command(id: &str, command: &str) -> Result<(String, Option<
             output_text.push_str(&chunk.to_string());
         }
     }
+
+    let status: ExecInspectResponse = manager.docker.inspect_exec(&exec.id).await?;
+    info!("Exit code: {:?}", status.exit_code);
 
     return Ok((output_text, status.exit_code));
 }
