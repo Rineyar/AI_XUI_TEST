@@ -7,12 +7,17 @@ use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
 use std::collections::HashMap; //Они кста тут живут  
+use std::path::{Path, PathBuf}; //Для путей к конту и вне
+use std::ffi::OsStr; //Путь для имени архива
+
+use tar::{Builder, Header, Archive, Entries, Entry}; //Упаковка файлов для конта
 
 use tracing::{error, info, warn}; //Логи
 
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
 use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
+use crate::container; //Функции для работы с контом
 
 //Для PyEnv
 use pyo3::prelude::*;
@@ -167,6 +172,170 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
         }).map_err(ToolExecutionError::from_error);
     }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
     .expect("Ошибка присоединения потока исполения");
+}
+
+#[rig_tool(
+    name = "create_container",
+    description = "Create and start a new Docker sandbox container. Returns the container ID."
+)]
+pub async fn create_container() -> Result<String, ToolExecutionError>
+{
+    return container::create_container().await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to create container: {:?}", err)));
+}
+
+#[rig_tool(
+    name = "remove_container",
+    description = "Remove a Docker sandbox container by its ID.",
+    params(
+        id = "ID of the container to remove."
+    )
+)]
+pub async fn remove_container(id: String) -> Result<(), ToolExecutionError>
+{
+    return container::remove_container(&id).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to remove container: {:?}", err)));
+}
+
+#[rig_tool(
+    name = "execute_command",
+    description = "Execute a shell command inside a running Docker sandbox container. Returns command output and exit code.",
+    params(
+        id = "ID of the target container.",
+        command = "Shell command to execute inside the container."
+    )
+)]
+pub async fn execute_command(id: String, command: String) -> Result<String, ToolExecutionError>
+{
+    let (output, exit_code) = container::execute_command(&id, &command).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to execute command: {:?}", err)))?;
+
+    return Ok(format!("Exit code: {:?}\nOutput:\n{:?}", exit_code, output));
+}
+
+#[rig_tool(
+    name = "send_path",
+    description = "Upload a file or directory from the agent workspace into a Docker sandbox container. Files and directories are packaged automatically.",
+    params(
+        id = "ID of the target container.",
+        local_path = "File or directory path relative to the agent workspace.",
+        remote_path = "Destination directory relative to /workspace inside the container. Use an empty string for the workspace root."
+    )
+)]
+pub async fn send_path(id: String, local_path: String, remote_path: String) -> Result<(), ToolExecutionError>
+{
+    let source: PathBuf = Path::new("/agent/workspace").join(&local_path);
+
+    let filename: &OsStr = source.file_name().ok_or_else(|| ToolExecutionError::invalid_args("Invalid source path."))?/*.to_string_lossy().into_owned()*/;
+
+    let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
+    archive.follow_symlinks(false);
+
+    if source.is_dir()
+    {
+        archive.append_dir_all(&filename, &source).map_err(|err| ToolExecutionError::other(format!("Failed to archive directory: {:?}", err)))?;
+    } else {
+        archive.append_path_with_name(&source, &filename).map_err(|err| ToolExecutionError::other(format!("Failed to archive file: {:?}", err)))?;
+    }
+
+    let files: Vec<u8> = archive.into_inner().map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
+
+    container::send_data(&id, &remote_path, files).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to upload files: {:?}", err)))?;
+
+    return Ok(());
+}
+
+#[rig_tool(
+    name = "send_text",
+    description = "Create or overwrite a UTF-8 text file directly inside a Docker sandbox container.",
+    params(
+        id = "ID of the target container.",
+        path = "Destination directory relative to /workspace inside the container.",
+        filename = "Name of the file to create.",
+        content = "UTF-8 text content to write."
+    )
+)]
+pub async fn send_text(id: String, path: String, filename: String, content: String) -> Result<(), ToolExecutionError>
+{
+    let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
+    let mut header: Header = Header::new_gnu();
+
+    header.set_size(content.len() as u64);
+    header.set_mode(0o644);
+
+    archive.append_data(&mut header, &filename, content.as_bytes())
+    .map_err(|err| ToolExecutionError::other(format!("Failed to archive text file: {:?}", err)))?;
+
+    let files: Vec<u8> = archive.into_inner()
+    .map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
+
+    container::send_data(&id, &path, files).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to upload text file: {:?}", err)))?;
+
+    return Ok(());
+}
+
+#[rig_tool(
+    name = "download_path",
+    description = "Download a file or directory from a Docker sandbox container and extract it into the agent workspace.",
+    params(
+        id = "ID of the target container.",
+        remote_path = "Source file or directory relative to /workspace inside the container.",
+        local_path = "Destination directory relative to the agent workspace."
+    )
+)]
+pub async fn download_path(id: String, remote_path: String, local_path: String) -> Result<(), ToolExecutionError>
+{
+    let files: Vec<u8> = container::load_data(&id, &remote_path).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to download files: {:?}", err)))?;
+
+    let destination: PathBuf = Path::new("/agent/workspace").join(&local_path);
+
+    let mut archive: Archive<&[u8]> = Archive::new(files.as_slice());
+
+    archive.unpack(&destination).map_err(|err| ToolExecutionError::other(format!("Failed to extract TAR archive: {:?}", err)))?;
+
+    return Ok(());
+}
+
+#[rig_tool(
+    name = "read_container_file",
+    description = "Read the UTF-8 contents of a text file inside a Docker sandbox container without saving it locally.",
+    params(
+        id = "ID of the target container.",
+        filename = "Text file path relative to /workspace inside the container."
+    )
+)]
+pub async fn read_container_file(id: String, filename: String) -> Result<String, ToolExecutionError>
+{
+    use std::io::Read;
+
+    let files: Vec<u8> = container::load_data(&id, &filename).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to download text file: {:?}", err)))?;
+
+    let mut archive: Archive<&[u8]> = tar::Archive::new(files.as_slice());
+
+    let entries: Entries<'_, &[u8]> = archive.entries()
+    .map_err(|err| ToolExecutionError::other(format!("Failed to read TAR archive: {:?}", err)))?;
+
+    for entry in entries.into_iter()
+    {
+        let mut entry: Entry<'_, &[u8]> = entry.map_err(|err| ToolExecutionError::other(format!("Failed to read TAR entry: {:?}", err)))?;
+
+        if !entry.header().entry_type().is_file()
+        {
+            continue;
+        }
+
+        let mut content: String = String::new();
+
+        entry.read_to_string(&mut content).map_err(|err| ToolExecutionError::other(format!("Failed to decode text file: {:?}", err)))?;
+
+        return Ok(content);
+    }
+
+    return Err(ToolExecutionError::not_found("No regular file found in downloaded archive."));
 }
 
 #[rig_tool(
