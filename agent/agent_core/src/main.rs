@@ -31,6 +31,9 @@ mod guards; //Гварды
 mod io; //Консоль
 use io::*;
 
+mod container; //Для DinD
+use container::*;
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -78,6 +81,8 @@ async fn main()
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
+    init_sandbox_manager(&time_start).await; //Изолятор
+
     let mut args_list: Vec<String> = args().collect();
 
     if args_list.len() == 1
@@ -111,36 +116,36 @@ async fn main()
     {
         "-L" =>
         {
-            let model: Client<_> = Client::from_url(MODEL_LOCAL_URL).inspect_err(|err|
+            let model: Client<_> = Client::from_url("http://localhost:1234").inspect_err(|err|
             error!("Локальня модель недоступна - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Локальня модель недоступна"); //Получение по ссылке
 
-            model.agent(MODEL_LOCAL_ID)
+            model.agent("openai/gpt-oss-20b")
         }
 
-        "-D" =>
+        "-S" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            .api_key(var("MAIN_MODEL_API_KEY").inspect_err(|err|
             error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует API ключ")) //Передать ключ
-            .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+            .base_url(MODEL_SERVER_URL) //Передать ссылку
             .build().inspect_err(|err|
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
 
             print_model_list(&model, &time_start).await;
 
-            model.agent(MODEL_DEEPSEEK_ID)
+            model.agent(MODEL_SERVER_ID)
         }
 
         "-Q" =>
         {
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
-            .api_key(var("DEEPSEEK_LOCAL_API_KEY").inspect_err(|err|
+            .api_key(var("MAIN_MODEL_API_KEY").inspect_err(|err|
             error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует API ключ")) //Передать ключ
-            .base_url(DEEPSEEK_LOCAL_URL) //Передать ссылку
+            .base_url(MODEL_SERVER_URL) //Передать ссылку
             .build().inspect_err(|err|
             error!("Сборка разливного не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка разливного не удалась");
@@ -194,11 +199,6 @@ async fn main()
     .context(MAIN_SKILLS)
     .context(SAST_SKILLS)
     .context(DAST_SKILLS)
-    /* Не требуются более
-    .tool(ToolSumI32) //Инструмент добавили
-    .tool(ToolSumI64)
-    .tool(ToolSubI64)
-    */
     .tool(RunZap)
     .tool(RunNuclei)
     .tool(ReadFile)
@@ -209,6 +209,13 @@ async fn main()
     .tool(DirectoryContents)
     .tool(RunBandit)
     .tool(RunSemgrep)
+    .tool(CreateContainer)
+    .tool(RemoveContainer)
+    .tool(ExecuteCommand)
+    .tool(SendPath)
+    .tool(SendText)
+    .tool(DownloadPath)
+    .tool(ReadContainerFile)
     .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
     .build(); //Builder -> Agent построить короче
 
