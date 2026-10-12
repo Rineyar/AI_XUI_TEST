@@ -2,8 +2,8 @@
 pub static SYSTEM_PROMPT: &str = include_str!("../../system_prompt.md");
 pub static TOOLS: &str = include_str!("../../tools/tools.md");
 pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
-pub static SAST_SKILLS: &str = include_str!("../../skills/sast/sast_skills.md");
-pub static DAST_SKILLS: &str = include_str!("../../skills/dast/dast_skills.md");
+pub static SAST_SKILLS: &str = include_str!("../../skills/sast_skills.md");
+pub static DAST_SKILLS: &str = include_str!("../../skills/dast_skills.md");
 
 //system_prompt. Собирается из файлов на этапе компиляции
 /*
