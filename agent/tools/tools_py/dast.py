@@ -79,32 +79,82 @@ __tool_meta__ = {
 image = "zaproxy/zap-stable"
 port = 8090
 api_key = "zapkey123"
-cont_name = "zap-daemon"
 
 ZAP_BASE_URL = os.environ.get(
     "ZAP_BASE_URL",
-    "http://zap:8090"
+    "http://sandbox:8090"
 ).rstrip("/")
 
-def _zap_api(path: str, params: dict = None) -> dict:
+def _zap_api(path: str, params: dict = None, timeout: int = 30) -> dict:
     if params is None:
         params = {}
     params["apikey"] = api_key
     url = f"{ZAP_BASE_URL}{path}"
-    r = requests.get(url, params=params, timeout=30)
+    r = requests.get(url, params=params, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
 
-def _wait_for_zap(timeout: int = 90) -> None:
-    start = time.time()
-    while time.time() - start < timeout:
+def _wait_for_zap(container_name: str, timeout: int = 90) -> None:
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        state = subprocess.run(
+            [
+                "docker", "inspect",
+                "-f", "{{.State.Status}}",
+                container_name
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if state.returncode != 0:
+            raise RuntimeError(
+                f"Не удалось проверить контейнер ZAP: "
+                f"{state.stderr.strip()}"
+            )
+
+        container_status = state.stdout.strip()
+
+        if container_status in ("exited", "dead"):
+            logs = subprocess.run(
+                ["docker", "logs", "--tail", "30", container_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            raise RuntimeError(
+                f"ZAP завершился со статусом {container_status}.\n"
+                f"{(logs.stdout + logs.stderr)[-3000:]}"
+            )
         try:
-            _zap_api("/JSON/core/view/version/")
+            _zap_api("/JSON/core/view/version/", timeout=3)
             return
-        except Exception:
-            time.sleep(2)
-    raise Exception(f"ZAP не запустился за {timeout} секунд")
+        except requests.HTTPError as e:
+            code = (
+                e.response.status_code
+                if e.response is not None
+                else None
+            )
+
+            if code in (400, 401, 403, 404):
+                raise RuntimeError(
+                    f"ZAP API отклонил запрос: HTTP {code}"
+                ) from e
+
+            last_error = str(e)
+
+        except requests.RequestException as e:
+            last_error = str(e)
+
+        time.sleep(2)
+
+    raise TimeoutError(
+        f"ZAP API не стал доступен за {timeout} секунд. "
+        f"Последняя ошибка: {last_error}"
+    )
 
 
 def _wait_for_scan(scan_type: str, scan_id: str, timeout: int = 600) -> None:
@@ -133,19 +183,21 @@ def run_zap(*, url: str,
         cmd = [
             "docker", "run", "-d",
             "--name", cont_name,
-            "--network", f"container:{os.environ['AGENT_CONTAINER_NAME']}",
+            "-p", f"{port}:{port}",
             "-e", f"ZAP_PORT={port}",
             image,
             "zap.sh", "-daemon",
-            "-host", "127.0.0.1",
+            "-host", "0.0.0.0",
             "-port", str(port),
-            "-config", f"api.key={api_key}"
+            "-config", f"api.key={api_key}",
+            "-config", "api.addrs.addr.name=.*",
+            "-config", "api.addrs.addr.regex=true",
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         container_started = True
 
-        _wait_for_zap()
+        _wait_for_zap(cont_name)
 
         spider_resp = _zap_api("/JSON/spider/action/scan/", {"url": url})
         spider_id = spider_resp["scan"]
