@@ -20,8 +20,6 @@ def _resolve_workspace_path(filename: str) -> Path:
     # Отрезаем ведущие точки и префикс workspace, если модель передала путь с ними
     if parts and parts[0] == ".":
         parts = parts[1:]
-    if parts and parts[0] == "workspace":
-        parts = parts[1:]
 
     clean_rel = Path(*parts) if parts else Path(".")
     return (WORKSPACE / clean_rel).resolve()
