@@ -57,6 +57,7 @@ services:
       - ./agent/logs:/agent/logs
       - sandbox-certs:/certs/client:ro  
     #  - ./agent/logs/selfanalysys.md:/agent/workspace/selfanalysys.md #РАскоменчивать на свой страх и риск. Удалять только на страх
+      - ./agent/workspace:/agent/import:ro
 
     stdin_open: true
     tty: true
