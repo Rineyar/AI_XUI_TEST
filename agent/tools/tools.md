@@ -1,5 +1,5 @@
 # Available Tools
-File tools operate in ./workspace. Docker sandbox tools operate in separate containers with their own /workspace directories.
+File tools operate in the agent's `./workspace`. Pass paths relative to that workspace (for example, `"src/main.py"`), not absolute `/workspace/...` paths. Docker sandbox tools operate in separate containers with their own `/workspace` directories.
 
 ## find_files
 Searches for files by pattern inside the workspace.  
@@ -17,8 +17,8 @@ Returns:
 
 Example:
 ```text
-/workspace/app.py
-/workspace/lib/util.py
+app.py
+lib/util.py
 ```
 
 or:
@@ -65,44 +65,41 @@ Returns:
     - Example: `[{"kind":"FILE","size":123,"name":"app.py"}]`
 
 
-## make_request
-Performs an HTTP/HTTPS request.  
-Use when the task requires interacting with a remote HTTP service.
+## http_request
+Performs a single HTTP/HTTPS GET or POST request.  
+Use when you need to inspect an HTTP endpoint, including its response status, headers, and body.
 
 Arguments:
-- `url` — full request URL
-    - Example: `"https://api.example.com/v1/items"`
-- `req_type` — request type: `"get"` or `"post"`
+- `url` — full HTTP or HTTPS URL (required)
+    - Example: `"http://127.0.0.1:8080/health"`
+- `req_type` — request method: `"get"` or `"post"` (required)
     - Example: `"get"`
-- `post_data` — POST request body, sent as `application/x-www-form-urlencoded`. Use only for POST.
-    - Example: `{ "user": "alice", "password": "secret" }`
-- `get_params` — query parameters for a GET request. Use only for GET.
+- `post_data` — optional dictionary of POST form fields, sent as `application/x-www-form-urlencoded`; use for POST only
+    - Example: `{ "name": "example" }`
+- `get_params` — optional dictionary of query parameters; use for GET only
     - Example: `{ "q": "python", "limit": "10" }`
 
 Returns:
 - JSON string with fields `success`, `output`, `error`
-    - For GET: `output` contains the HTTP status code
-        - Example: `{"success": true, "output": 200, "error": ""}`
-    - For POST: `output` contains the parsed JSON response
-        - Example: `{"success": true, "output": {"token": "abc123"}, "error": ""}`
-
-## dump_env
-Shows available environment variables.  
-Use when runtime environment information is relevant to the task.
-
-Arguments:
-- none
-
-Returns:
-- JSON string with fields `success`, `output`, `error`
-- `output` — JSON string with environment variables
-- if any key contains `PASSWORD`, `TOKEN`, or `SECRET`, the environment is not returned and `success=false`
+- On a completed request, `output` contains:
+    - `status_code` — HTTP response status
+    - `headers` — response headers
+    - `body` — first 10,000 characters of the response body, as text
+    - `truncated` — `true` if the body was longer than 10,000 characters
+- HTTP 4xx/5xx responses are valid HTTP responses and do not by themselves set `success=false`.
+- Network failures and timeouts set `success=false` and describe the error in `error`.
+- Automatic redirects are disabled. The connection and read timeouts are 5 and 15 seconds, respectively.
 
 Example:
 ```json
 {
     "success": true,
-    "output": "{\n    \"PATH\": \"/usr/local/bin:/usr/bin:/bin\",\n    \"HOME\": \"/home/user\"\n}",
+    "output": {
+        "status_code": 404,
+        "headers": {"Content-Type": "text/plain"},
+        "body": "Not found",
+        "truncated": false
+    },
     "error": ""
 }
 ```
@@ -112,17 +109,17 @@ Runs Bandit — a SAST tool for analyzing Python code security.
 Use when you need to find potential vulnerabilities in Python code.
 
 Arguments:
-- `targets` — list of files/directories to analyze
-    - Example: `["."]`
-- `recursive` — whether to discover files recursively
+- `targets` — optional list of files/directories relative to the agent workspace; default `["."]`
+    - Example: `["src"]`
+- `recursive` — whether to discover files recursively; default `true`
     - Example: `true`
-- `config_file` — optional path to a Bandit config file
+- `config_file` — optional path to a local Bandit config file, relative to the agent workspace
     - Example: `"bandit.yaml"`
-- `agg_type` — aggregation type: `"vuln"`, `"file"`, `"baseline"`
+- `agg_type` — aggregation type: `"vuln"`, `"file"`, `"baseline"`; default `"vuln"`
     - Example: `"vuln"`
-- `sev_level` — severity level filter: `"LOW"`, `"MEDIUM"`, `"HIGH"`
+- `sev_level` — minimum severity: `"LOW"`, `"MEDIUM"`, `"HIGH"`; default `"LOW"`
     - Example: `"LOW"`
-- `conf_level` — confidence level filter: `"LOW"`, `"MEDIUM"`, `"HIGH"`
+- `conf_level` — minimum confidence: `"LOW"`, `"MEDIUM"`, `"HIGH"`; default `"LOW"`
     - Example: `"LOW"`
 
 Returns:
@@ -130,6 +127,7 @@ Returns:
 - `output` contains:
     - `result` — discovered issues
     - `skipped` — skipped files
+- File paths in findings and skipped-file entries are expressed relative to the agent workspace.
 
 Example:
 ```json
@@ -148,16 +146,16 @@ Runs Semgrep — a SAST tool for code analysis.
 Always appends `p/security-audit` and `p/secrets` to the provided configs.
 
 Arguments:
-- `targets` — list of targets to analyze
-    - Example: `["."]`
-- `configs` — list of Semgrep configs
-    - Example: `["p/python", "p/rust"]`
-- `timeout` — per-file analysis timeout in seconds
+- `targets` — optional list of files/directories relative to the agent workspace; default `["."]`
+    - Example: `["src"]`
+- `configs` — optional list of Semgrep Registry rulesets (`p/...`) and/or local configuration files relative to the agent workspace
+    - Example: `["p/python", "rules/custom.yaml"]`
+- `timeout` — per-file analysis timeout in seconds; default `5`
     - Example: `5`
 
 Returns:
 - JSON string with fields `success`, `output`, `error`
-- `output` — parsed JSON report from Semgrep
+- `output` — parsed JSON report from Semgrep; finding paths are relative to the agent workspace
 
 Example:
 ```json
@@ -172,20 +170,23 @@ Example:
 ```
 
 ## run_nuclei
-Runs Nuclei — a DAST tool for checking an HTTP target against templates.  
-Use when you need to scan a URL for known vulnerabilities/templates.
+Runs Nuclei — a DAST scanner using preinstalled detection templates.  
+Use to check an authorized local HTTP/HTTPS target for known security issues.
 
 Arguments:
-- `target_url` — target URL. Only HTTP protocol is allowed
+- `target_url` — target HTTP or HTTPS URL (required; the guard restricts DAST targets to local/private addresses)
     - Example: `"http://127.0.0.1:8080"`
-- `template` — path to a template from the `agent` folder, `.yaml` file. If not specified, Nuclei's built-in templates are used.
-    - Example: `"my-template.yaml"`
-- `severity` — severity of threats to search for. Default is `"info,low,medium,high,critical"`
+- `template` — optional file or directory **relative to `NUCLEI_TEMPLATES_DIR`** (`/agent/tools/nuclei-templates`); YAML files and template directories are supported. Omit to select the entire installed template collection.
+    - Example: `"http/technologies"`
+- `severity` — comma-separated severity levels; default `"info,low,medium,high,critical"`
     - Example: `"medium,high,critical"`
+- `timeout` — optional maximum duration of the full scan, in seconds; default `120`
+    - Example: `120`
 
 Returns:
 - JSON string with fields `success`, `output`, `error`
-- `output` — list of parsed JSON lines from Nuclei output
+- `output` — list of JSON findings produced by Nuclei (may be empty)
+- When the scan fails or exceeds its time limit, `success=false` and `error` explains why.
 
 Example:
 ```json
@@ -206,17 +207,17 @@ Example:
 
 ## run_zap
 
-Runs OWASP ZAP in Docker, scans the specified URL, and returns a JSON report.  
-Use when you need DAST analysis of a web application via ZAP.
+Runs OWASP ZAP in a temporary Docker container, scans the specified URL, returns a JSON report, and attempts to remove the container afterward (including after errors).  
+Use when you need DAST analysis of an authorized local web application via ZAP. Docker access must be available to the agent.
 
 Arguments:
-- `url` — target URL
-    - Example: `"http://host.docker.internal:3000"`
-- `spider_timeout` — spider scan timeout in seconds, default `600`
+- `url` — target HTTP or HTTPS URL, reachable from the agent/ZAP network (the guard restricts DAST targets to local/private addresses)
+    - Example: `"http://127.0.0.1:3000"`
+- `spider_timeout` — spider scan timeout in seconds; default `600`
     - Example: `600`
-- `ascan_timeout` — active scan timeout in seconds, default `1800`
+- `ascan_timeout` — active scan timeout in seconds; default `1800`
     - Example: `1800`
-- `do_ascan` — whether to perform an active scan, default `false`
+- `do_ascan` — whether to perform an active scan; default `false`
     - Example: `false`
 
 Returns:
@@ -232,7 +233,7 @@ Example:
 {
     "success": true,
     "output": {
-        "target": "http://host.docker.internal:3000",
+        "target": "http://127.0.0.1:3000",
         "ascan_done": false,
         "alerts_count": 0,
         "alerts": []
