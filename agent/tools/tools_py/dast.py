@@ -5,6 +5,7 @@ import requests
 import files
 import os
 from pathlib import Path
+import uuid
 
 __all__ = ["run_nuclei","run_zap"]
 
@@ -80,12 +81,16 @@ port = 8090
 api_key = "zapkey123"
 cont_name = "zap-daemon"
 
+ZAP_BASE_URL = os.environ.get(
+    "ZAP_BASE_URL",
+    "http://zap:8090"
+).rstrip("/")
 
 def _zap_api(path: str, params: dict = None) -> dict:
     if params is None:
         params = {}
     params["apikey"] = api_key
-    url = f"http://localhost:{port}{path}"
+    url = f"{ZAP_BASE_URL}{path}"
     r = requests.get(url, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
@@ -120,23 +125,25 @@ def run_zap(*, url: str,
 
     output = {"success": False, "output": "", "error": ""}
 
-    try:
-        subprocess.run(["docker", "rm", "-f", cont_name],
-                       capture_output=True, text=True)
+    cont_name = f"zap-daemon-{uuid.uuid4().hex[:12]}"
 
+    container_started = False
+
+    try:
         cmd = [
             "docker", "run", "-d",
             "--name", cont_name,
-            "-p", f"{port}:{port}",
+            "--network", f"container:{os.environ['AGENT_CONTAINER_NAME']}",
+            "-e", f"ZAP_PORT={port}",
             image,
             "zap.sh", "-daemon",
-            "-host", "0.0.0.0",
+            "-host", "127.0.0.1",
             "-port", str(port),
-            "-config", f"api.key={api_key}",
-            "-config", "api.addrs.addr.name=.*",
-            "-config", "api.addrs.addr.regex=true",
+            "-config", f"api.key={api_key}"
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+        container_started = True
 
         _wait_for_zap()
 
@@ -168,8 +175,18 @@ def run_zap(*, url: str,
     except Exception as e:
         output["error"] = f"Exception: {e}"
     finally:
-        subprocess.run(["docker", "rm", "-f", cont_name],
-                       capture_output=True, text=True)
+        if container_started:
+            try:
+                subprocess.run(
+                    ["docker", "rm", "-f", cont_name],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            except Exception as e:
+                output["success"] = False
+                output["error"] += f" Cleanup error: {e}"
 
     return json.dumps(output, indent=4, ensure_ascii=False)
 
