@@ -97,7 +97,7 @@ def run_semgrep(*, targets: list = ["."],
 
         configs = [
             config if config.startswith("p/")
-            else str(files._resolve_workspace_path(config))
+            else str(files._resolve_workspace_path(config)) #АККУРАТНО
             for config in configs
         ]
 
