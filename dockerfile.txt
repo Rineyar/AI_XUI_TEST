@@ -90,4 +90,4 @@ USER agent
 
 #Запуск
 ENTRYPOINT ["./agent_core/agent_core"]
-CMD ["-D"]
+CMD ["-S"]
