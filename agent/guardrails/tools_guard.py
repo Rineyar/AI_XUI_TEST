@@ -1,9 +1,11 @@
 import json
 import re
 from urllib.parse import urlsplit
-
+import ipaddress
 import path_guard
 import policy
+import os
+from pathlib import Path
 
 
 __all__ = ["guard_select", "guard_response"]
@@ -27,6 +29,8 @@ TOOL_GUARDS = {
     "directory_contents": lambda args: _guard_directory_contents(args),
     "run_bandit": lambda args: _guard_run_bandit(args),
     "run_semgrep": lambda args: _guard_run_semgrep(args),
+    "run_nuclei": lambda args: _guard_run_nuclei(args),
+    "run_zap": lambda args: _guard_run_zap(args),
 }
 
 
@@ -69,8 +73,8 @@ def _guard_write_file(args):
 
 def _guard_make_request(args):
     url = urlsplit(args.get("url"))
-    if url.scheme.lower() != "https":
-        raise ValueError("Разрешены только HTTPS-запросы")
+    if url.scheme.lower() not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
     if not url.hostname:
         raise ValueError("В URL отсутствует имя хоста")
     if url.username or url.password:
@@ -130,6 +134,79 @@ def _guard_run_semgrep(args):
     if timeout < 1 or timeout > 60:
         raise ValueError("Timeout Semgrep должен быть от 1 до 60 секунд")
 
+def _host_is_local(hostname: str)->bool:
+    if hostname in {"localhost", "localhost.localdomain",
+        "ip6-localhost", "ip6-loopback", "host.docker.internal",
+        "gateway.docker.internal", "kubernetes.docker.internal",
+        "host.containers.internal"}:
+        return True
+
+    if hostname.endswith(".local"):
+        return True
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_unspecified
+        or ip.is_reserved
+    )
+
+def _guard_run_nuclei(args):
+    template = args.get("template")
+    target_url = urlsplit(args.get("target_url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
+    if template:
+        root = Path(os.environ["NUCLEI_TEMPLATES_DIR"]).resolve(strict=True)
+        requested = Path(template)
+
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к шаблону")
+
+        target = (root / requested).resolve(strict=True)
+
+        if not target.is_relative_to(root):
+            raise ValueError("Шаблон находится вне каталога Nuclei")
+
+        if not target.is_dir() and not (
+            target.is_file() and target.suffix.lower() in (".yaml", ".yml")
+        ):
+            raise ValueError("Ожидался каталог или YAML-шаблон Nuclei")
+        
+    severity = args.get("severity", "info,low,medium,high,critical")
+
+    levels = [level.strip().lower() for level in severity.split(",")]
+
+    if not levels or any(level not in RISKS for level in levels):
+        raise ValueError("Недопустимый уровень риска")
+
+    timeout = args.get("timeout", 120)
+
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= 600:
+        raise ValueError("Nuclei timeout должен быть от 1 до 600 секунд")
+
+def _guard_run_zap(args):
+    target_url = urlsplit(args.get("url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
 
 def guard_response(response):
     try:

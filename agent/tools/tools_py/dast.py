@@ -1,9 +1,11 @@
 import subprocess
 import json
-import json
-import subprocess
 import time
 import requests
+import files
+import os
+from pathlib import Path
+import uuid
 
 __all__ = ["run_nuclei","run_zap"]
 
@@ -12,7 +14,7 @@ target_url - url адрес цели. Допускается только http �
 template - Путь к шаблону из папки agent. Шаблон должен быть в формате .yaml. По умолчанию использует свои шаблоны. 
 severity - Важность искомых угроз. По умолчанию ищет все.
 '''
-def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,medium,high,critical"):
+def run_nuclei(*, target_url: str, template: str = None, severity: str = "info,low,medium,high,critical", timeout: int = 120):
     output = {
             "success" : False,
             "output" : "",
@@ -21,10 +23,31 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
     command = ["nuclei", "-u", target_url, "-type", "http", "-max-host-error", "0", "-severity", severity, "-j", '-silent']
 
     if template:
-        command.extend(["-t", r"./agent/"+template])
+        templates_root = Path(
+            os.environ["NUCLEI_TEMPLATES_DIR"]
+        ).resolve(strict=True)
+
+        requested = Path(template) if template else Path(".")
+
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к шаблону")
+
+        template_path = (templates_root / requested).resolve(strict=True)
+
+        if not template_path.is_relative_to(templates_root):
+            raise ValueError("Шаблон находится вне каталога Nuclei")
+
+        command.extend(["-t", str(template_path)])
 
     try:
-        nuclei = subprocess.run(command, capture_output=True, text=True)
+        nuclei = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+
+        if nuclei.returncode != 0:
+            raise RuntimeError(
+                f"Nuclei exited with code {nuclei.returncode}: "
+                f"{nuclei.stderr.strip()}"
+            )
+
         output["output"] = []
         for line in nuclei.stdout.strip().split('\n'):
             if line:
@@ -33,6 +56,10 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
                 except json.JSONDecodeError:
                     continue
         output["success"] = True
+
+    except subprocess.TimeoutExpired:
+        output["error"] = f"Nuclei timed out after {timeout} seconds"
+
     except Exception as e:
         output["error"] = f"Exception: {e}"
     
@@ -52,28 +79,89 @@ __tool_meta__ = {
 image = "zaproxy/zap-stable"
 port = 8090
 api_key = "zapkey123"
-cont_name = "zap-daemon"
 
+ZAP_BASE_URL = os.environ.get(
+    "ZAP_BASE_URL",
+    "http://sandbox:8090"
+).rstrip("/")
 
-def _zap_api(path: str, params: dict = None) -> dict:
-    if params is None:
-        params = {}
-    params["apikey"] = api_key
-    url = f"http://localhost:{port}{path}"
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
+def _zap_api(path: str, params: dict = None, timeout: int = 30) -> dict:
+    query = dict(params or {})
+    query["apikey"] = api_key
+    url = f"{ZAP_BASE_URL}{path}"
+    r = requests.get(url, params=query, timeout=timeout)
+
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        raise requests.HTTPError(
+            f"ZAP API HTTP {r.status_code}: {r.text[:1500]}",
+            response=r
+        ) from e
+
     return r.json()
 
 
-def _wait_for_zap(timeout: int = 90) -> None:
-    start = time.time()
-    while time.time() - start < timeout:
+def _wait_for_zap(container_name: str, timeout: int = 90) -> None:
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        state = subprocess.run(
+            [
+                "docker", "inspect",
+                "-f", "{{.State.Status}}",
+                container_name
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if state.returncode != 0:
+            raise RuntimeError(
+                f"Не удалось проверить контейнер ZAP: "
+                f"{state.stderr.strip()}"
+            )
+
+        container_status = state.stdout.strip()
+
+        if container_status in ("exited", "dead"):
+            logs = subprocess.run(
+                ["docker", "logs", "--tail", "30", container_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            raise RuntimeError(
+                f"ZAP завершился со статусом {container_status}.\n"
+                f"{(logs.stdout + logs.stderr)[-3000:]}"
+            )
         try:
-            _zap_api("/JSON/core/view/version/")
+            _zap_api("/JSON/core/view/version/", timeout=3)
             return
-        except Exception:
-            time.sleep(2)
-    raise Exception(f"ZAP не запустился за {timeout} секунд")
+        except requests.HTTPError as e:
+            code = (
+                e.response.status_code
+                if e.response is not None
+                else None
+            )
+
+            if code in (400, 401, 403, 404):
+                raise RuntimeError(
+                    f"ZAP API отклонил запрос: HTTP {code}"
+                ) from e
+
+            last_error = str(e)
+
+        except requests.RequestException as e:
+            last_error = str(e)
+
+        time.sleep(2)
+
+    raise TimeoutError(
+        f"ZAP API не стал доступен за {timeout} секунд. "
+        f"Последняя ошибка: {last_error}"
+    )
 
 
 def _wait_for_scan(scan_type: str, scan_id: str, timeout: int = 600) -> None:
@@ -94,14 +182,16 @@ def run_zap(*, url: str,
 
     output = {"success": False, "output": "", "error": ""}
 
-    try:
-        subprocess.run(["docker", "rm", "-f", cont_name],
-                       capture_output=True, text=True)
+    cont_name = f"zap-daemon-{uuid.uuid4().hex[:12]}"
 
+    container_started = False
+
+    try:
         cmd = [
             "docker", "run", "-d",
             "--name", cont_name,
             "-p", f"{port}:{port}",
+            "-e", f"ZAP_PORT={port}",
             image,
             "zap.sh", "-daemon",
             "-host", "0.0.0.0",
@@ -112,7 +202,9 @@ def run_zap(*, url: str,
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-        _wait_for_zap()
+        container_started = True
+
+        _wait_for_zap(cont_name)
 
         spider_resp = _zap_api("/JSON/spider/action/scan/", {"url": url})
         spider_id = spider_resp["scan"]
@@ -142,8 +234,18 @@ def run_zap(*, url: str,
     except Exception as e:
         output["error"] = f"Exception: {e}"
     finally:
-        subprocess.run(["docker", "rm", "-f", cont_name],
-                       capture_output=True, text=True)
+        if container_started:
+            try:
+                subprocess.run(
+                    ["docker", "rm", "-f", cont_name],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            except Exception as e:
+                output["success"] = False
+                output["error"] += f" Cleanup error: {e}"
 
     return json.dumps(output, indent=4, ensure_ascii=False)
 
@@ -152,4 +254,4 @@ if __name__ == "__main__":
     result = run_zap(url="http://host.docker.internal:3000", do_ascan=False)
     print(result)
     TARGET_URL = "http://127.0.0.1:8080"
-    print(run_nuclei(TARGET_URL))
+    print(run_nuclei(target_url=TARGET_URL))

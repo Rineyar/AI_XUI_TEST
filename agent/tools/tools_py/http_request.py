@@ -13,16 +13,28 @@ __tool_meta__ = {
 # Возвращает код ответа
 def make_get(url : str, params : dict | None = None):
     try:
-        r = requests.get(url, params=params)
-        return r.status_code, ""
+        r = requests.get(url, params=params, timeout=(5, 15), allow_redirects=False)
+        return {
+                    "status_code": r.status_code,
+                    "headers": dict(r.headers),
+                    "body": r.text[:10_000],
+                    "truncated": len(r.text) > 10_000
+                }, ""
     except requests.RequestException as e:
         return None, f"GET failed: {e}"
 
 # Возвращает json
 def make_post(url : str, data : dict | None = None):
     try:
-        r = requests.post(url, data=data)
-        return r.json(), ""
+        r = requests.post(url, data=data, timeout=(5, 15), allow_redirects=False)
+        body = r.text
+
+        return {
+                    "status_code": r.status_code,
+                    "headers": dict(r.headers),
+                    "body": body[:10_000],
+                    "truncated": len(body) > 10_000
+                }, ""
     except requests.RequestException as e:
         return None, f"POST failed: {e}"
 
@@ -46,11 +58,11 @@ def make_request(*, url : str, req_type : str = "get",
         case _:
             error = "Incorrect request type."
 
-    if r:
+    if error:
+        output["error"] = error
+    else:
         output["success"] = True
         output["output"] = r
-    else:
-        output["error"] = error
 
     return json.dumps(output, indent=4, ensure_ascii=False)
             

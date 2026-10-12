@@ -1,5 +1,10 @@
-#Сборка
-FROM rust:1.98.1-trixie AS builder
+#Часть со сборкой
+#==========================================#
+
+#Сборка Rust
+#==========================================#
+#FROM rust:1.99.0-trixie AS rust-builder обновиться позже
+FROM rust:1.98.1-trixie AS rust-builder
 
 #Py среда для сборки и линковки
 RUN apt-get update \
@@ -25,10 +30,32 @@ COPY agent/guardrails /build/agent/guardrails
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-    cargo build --release \
+    cargo build --release --locked \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
-#Запуск
+#==========================================#
+
+#Сборка Nuclei
+#==========================================#
+FROM golang:1.26-alpine AS nuclei-builder
+
+RUN apk add --no-cache git
+
+RUN CGO_ENABLED=0 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.11.1
+#==========================================#
+
+#Загрузка Nuclei Templates
+#==========================================#
+FROM alpine:3.22 AS nuclei-templates-builder
+
+RUN apk add --no-cache git ca-certificates
+
+RUN git clone --depth 1 --branch v10.5.0 https://github.com/projectdiscovery/nuclei-templates.git /nuclei-templates \
+    && rm -rf /nuclei-templates/.git
+#==========================================#
+
+#Запуск агента
+#==========================================#
 FROM python:3.13-slim-trixie
 
 #Имя
@@ -38,31 +65,50 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
+ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
+
+#Создание пользователя и Изолятора
+RUN useradd --create-home --uid 1000 --user-group agent && install -d -o root -g agent -m 1770 /agent/workspace
 
 #Добавить необходимые библиотеки питону
-RUN pip install --no-cache-dir requests bandit semgrep
+RUN pip install --no-cache-dir \
+    requests==2.34.2 \
+    bandit==1.9.4 \
+    semgrep==1.180.0 \
+    && pip check
+
+#Установка пакетов для загрузки по http
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+#Nuclei с доступом из path
+COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
+COPY --from=nuclei-templates-builder /nuclei-templates /agent/tools/nuclei-templates
+
+#Взять собранный под контейнер ELF
+COPY --from=rust-builder /build/agent_core /agent/agent_core/agent_core
 
 #Рабочая область
 WORKDIR /agent
 
-#Изолятор
-RUN mkdir -p /agent/workspace
-
 #Его файлы на тест
-COPY agent/agent_core/src /agent/workspace/agent_core
-COPY agent/tools /agent/workspace/tools
+COPY --chown=root:root agent/agent_core/src /agent/workspace/self/agent_core
+COPY --chown=root:root agent/tools /agent/workspace/self/tools
+COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
+COPY --chown=root:root agent/skills /agent/workspace/self/skills
 
-#Взять собранный под контейнер ELF
-COPY --from=builder /build/agent_core /agent/agent_core/agent_core
+#Для Zap
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
 
-#Создание пользователя, выдача прав
-RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
-
-#На будущее сделать agent только read
-
+#Стартуем
+#==========================================#
 #Дальше пашешь ты
 USER agent
 
-#Запуск
-ENTRYPOINT ["./agent_core/agent_core"]
-CMD ["-D"]
+#Скрипт запуска
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
+CMD ["-S"]
+#==========================================#
