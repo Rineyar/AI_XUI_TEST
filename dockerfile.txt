@@ -98,7 +98,8 @@ COPY --chown=root:root agent/tools /agent/workspace/self/tools
 COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
 COPY --chown=root:root agent/skills /agent/workspace/self/skills
 
-#На будущее сделать agent только read
+#Для Zap
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
 
 #Дальше пашешь ты
 USER agent
