@@ -2,6 +2,9 @@ import subprocess
 import json
 import time
 import requests
+import files
+import os
+from pathlib import Path
 
 __all__ = ["run_nuclei","run_zap"]
 
@@ -19,7 +22,21 @@ def run_nuclei(*, target_url: str, template: str = None, severity: str = "info,l
     command = ["nuclei", "-u", target_url, "-type", "http", "-max-host-error", "0", "-severity", severity, "-j", '-silent']
 
     if template:
-        command.extend(["-t", template])
+        templates_root = Path(
+            os.environ["NUCLEI_TEMPLATES_DIR"]
+        ).resolve(strict=True)
+
+        requested = Path(template) if template else Path(".")
+
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к шаблону")
+
+        template_path = (templates_root / requested).resolve(strict=True)
+
+        if not template_path.is_relative_to(templates_root):
+            raise ValueError("Шаблон находится вне каталога Nuclei")
+
+        command.extend(["-t", str(template_path)])
 
     try:
         nuclei = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
