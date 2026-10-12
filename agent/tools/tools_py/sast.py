@@ -2,6 +2,7 @@ import json
 import subprocess
 from bandit.core import config as b_config
 from bandit.core import manager as b_manager
+import files
 
 __all__ = ["run_bandit", "run_semgrep"]
 
@@ -30,6 +31,11 @@ def run_bandit(*, targets: list = ["."],
     }
 
     try:
+        targets = [str(files._resolve_workspace_path(target)) for target in targets]
+
+        if config_file is not None:
+            config_file = str(files._resolve_workspace_path(config_file))
+            
         # Создаем конфигурация
         bc = b_config.BanditConfig(config_file)
         # Создаем менеджер
