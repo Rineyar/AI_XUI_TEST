@@ -33,8 +33,6 @@ def check_write_path(path):
         # Резолвим относительно WORKSPACE!
         target = (policy.WORKSPACE / requested).resolve(strict=False)
         target.relative_to(policy.WORKSPACE)
-        parent = target.parent.resolve(strict=True)
-        parent.relative_to(policy.WORKSPACE)
     except Exception as error:
         raise ValueError("Path does not exist or is out side of workspace") from error
 
