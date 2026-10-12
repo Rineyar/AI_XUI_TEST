@@ -14,7 +14,7 @@ ALLOWED_TOOLS = {
     "find_files",
     "directory_contents",
     "run_bandit",
-    "run_semgrep",
+    "run_semgrep"
 }
 
 TOOLS_IN_TEST = {
