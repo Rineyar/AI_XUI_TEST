@@ -3,6 +3,7 @@ import subprocess
 from bandit.core import config as b_config
 from bandit.core import manager as b_manager
 import files
+from pathlib import Path
 
 __all__ = ["run_bandit", "run_semgrep"]
 
@@ -50,8 +51,15 @@ def run_bandit(*, targets: list = ["."],
 
         # Переписываем проблемы как словари
         issues = [issue.as_dict() for issue in issues]
+
+        for issue in issues:
+            issue["filename"] = _relative_path(issue["filename"])
+
         # Записываем пропущенные файлы
         skipped = [{"fname": fname, "reason": reason} for fname, reason in bm.get_skipped()]
+
+        for entry in skipped:
+            entry["fname"] = _relative_path(entry["fname"])
 
         output["output"] = {
             "result": issues,
@@ -112,12 +120,27 @@ def run_semgrep(*, targets: list = ["."],
             raise Exception(f"Semgrep exited with code: {semgrep_p.returncode}")
 
         output["success"] = True
-        output["output"] = json.loads(semgrep_p.stdout)
+
+
+        report = json.loads(semgrep_p.stdout)
+
+        for finding in report.get("results", []):
+            finding["path"] = _relative_path(finding["path"])
+
+        output["output"] = report
 
     except Exception as e:
         output["error"] = f"Exception: {e}"
 
     return json.dumps(output, indent=4, ensure_ascii=False)
+
+def _relative_path(path: str) -> str:
+    p = Path(path)
+
+    if p.is_absolute():
+        return p.resolve().relative_to(files.WORKSPACE).as_posix()
+
+    return p.as_posix()
     
 if __name__ == "__main__":
     # print(run_bandit())
