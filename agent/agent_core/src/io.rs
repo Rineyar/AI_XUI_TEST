@@ -11,6 +11,7 @@ use std::time::Instant;
 use crossterm::{execute, event::{EnableMouseCapture, DisableMouseCapture}, 
 terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}}; //А это и есть вывод
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind}; //Для захвата и обработки мыши
+use crossterm::event::{EnableBracketedPaste, DisableBracketedPaste}; //Для вставки
 
 use ratatui::{backend::CrosstermBackend, text::{Line}, widgets::Paragraph, Terminal}; //Новый вывод
 use ratatui::layout::{Constraint, Layout, Rect}; //Рамочки и координаты символов
@@ -152,7 +153,7 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
         let mut running: bool = true;
 
         enable_raw_mode().expect("Не удалось включить raw mode");
-        execute!(stdout(), EnterAlternateScreen, EnableMouseCapture).expect("Не удалось настроить терминал");
+        execute!(stdout(), EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste).expect("Не удалось настроить терминал");
         let backend: CrosstermBackend<Stdout> = CrosstermBackend::new(stdout()); //Связь с cross
 
         //Консолька
@@ -377,6 +378,13 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                         }
                     }
 
+                    Event::Paste(text) =>
+                    {
+                        input.insert_str(&text);
+
+                        info!("Paste event: {} байт", text.len());
+                    }
+
                     _ => {}
                 }
             }
@@ -399,7 +407,7 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
         }
 
         disable_raw_mode().expect("Не удалось отключить raw mode");
-        execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen).expect("Не удалось восстановить терминал");
+        execute!(terminal.backend_mut(), DisableBracketedPaste, DisableMouseCapture, LeaveAlternateScreen).expect("Не удалось восстановить терминал");
         terminal.show_cursor().expect("Не удалось вернуть курсор");
 
         let _terminal_guard: TerminalGuard = TerminalGuard;
@@ -422,7 +430,7 @@ pub fn restore_terminal()
 {
     let _ = disable_raw_mode();
 
-    let _ = execute!(stdout(), DisableMouseCapture, LeaveAlternateScreen);
+    let _ = execute!(stdout(), DisableBracketedPaste, DisableMouseCapture, LeaveAlternateScreen);
 }
 
 pub async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: &Instant)
