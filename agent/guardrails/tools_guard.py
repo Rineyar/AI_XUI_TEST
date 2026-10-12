@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 import ipaddress
 import path_guard
 import policy
+import os
+from pathlib import Path
 
 
 __all__ = ["guard_select", "guard_response"]
@@ -167,8 +169,22 @@ def _guard_run_nuclei(args):
     if not _host_is_local(target_host.strip("[]").lower()):
         raise ValueError("Адрес не является локальным")
     if template:
-        path_guard.check_path(template, directory=False)
+        root = Path(os.environ["NUCLEI_TEMPLATES_DIR"]).resolve(strict=True)
+        requested = Path(template)
 
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к шаблону")
+
+        target = (root / requested).resolve(strict=True)
+
+        if not target.is_relative_to(root):
+            raise ValueError("Шаблон находится вне каталога Nuclei")
+
+        if not target.is_dir() and not (
+            target.is_file() and target.suffix.lower() in (".yaml", ".yml")
+        ):
+            raise ValueError("Ожидался каталог или YAML-шаблон Nuclei")
+        
     severity = args.get("severity", "info,low,medium,high,critical")
 
     levels = [level.strip().lower() for level in severity.split(",")]
