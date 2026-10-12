@@ -86,12 +86,19 @@ ZAP_BASE_URL = os.environ.get(
 ).rstrip("/")
 
 def _zap_api(path: str, params: dict = None, timeout: int = 30) -> dict:
-    if params is None:
-        params = {}
-    params["apikey"] = api_key
+    query = dict(params or {})
+    query["apikey"] = api_key
     url = f"{ZAP_BASE_URL}{path}"
-    r = requests.get(url, params=params, timeout=timeout)
-    r.raise_for_status()
+    r = requests.get(url, params=query, timeout=timeout)
+
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        raise requests.HTTPError(
+            f"ZAP API HTTP {r.status_code}: {r.text[:1500]}",
+            response=r
+        ) from e
+
     return r.json()
 
 
