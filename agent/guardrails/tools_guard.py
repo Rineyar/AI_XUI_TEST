@@ -168,9 +168,18 @@ def _guard_run_nuclei(args):
         raise ValueError("Адрес не является локальным")
     if template:
         path_guard.check_path(template, directory=False)
-    for severity in args.get("severity", RISKS):
-        if severity not in RISKS:
-            raise ValueError("Недопустимый уровень риска")
+
+    severity = args.get("severity", "info,low,medium,high,critical")
+
+    levels = [level.strip().lower() for level in severity.split(",")]
+
+    if not levels or any(level not in RISKS for level in levels):
+        raise ValueError("Недопустимый уровень риска")
+
+    timeout = args.get("timeout", 120)
+
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= 600:
+        raise ValueError("Nuclei timeout должен быть от 1 до 600 секунд")
 
 def _guard_run_zap(args):
     target_url = urlsplit(args.get("url"))
