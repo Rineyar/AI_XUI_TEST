@@ -3,6 +3,7 @@
 
 #Сборка Rust
 #==========================================#
+#FROM rust:1.99.0-trixie AS rust-builder обновиться позже
 FROM rust:1.98.1-trixie AS rust-builder
 
 #Py среда для сборки и линковки
@@ -34,11 +35,23 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
 
 #==========================================#
 
-# Сборка nuclei
+#Сборка Nuclei
 #==========================================#
-FROM golang:1.24-alpine AS nuclei-builder
+FROM golang:1.26-alpine AS nuclei-builder
+
 RUN apk add --no-cache git
-RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.3.5
+
+RUN CGO_ENABLED=0 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.11.1
+#==========================================#
+
+#Загрузка Nuclei Templates
+#==========================================#
+FROM alpine:3.22 AS nuclei-templates-builder
+
+RUN apk add --no-cache git ca-certificates
+
+RUN git clone --depth 1 --branch v10.5.0 https://github.com/projectdiscovery/nuclei-templates.git /nuclei-templates \
+    && rm -rf /nuclei-templates/.git
 #==========================================#
 
 #Запуск агента
@@ -52,7 +65,7 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
-ENV NUCLEI_TEMPLATES_PATH=/agent/tools/nuclei-templates
+ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
 
 #Добавить необходимые библиотеки питону
 RUN pip install --no-cache-dir requests bandit semgrep
@@ -66,6 +79,7 @@ RUN apt-get update && apt-get install -y \
 
 # Nuclei с доступом из path
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
+COPY --from=nuclei-templates-builder /nuclei-templates /agent/tools/nuclei-templates
 
 #Рабочая область
 WORKDIR /agent
