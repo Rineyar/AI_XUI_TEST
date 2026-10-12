@@ -10,7 +10,7 @@ target_url - url адрес цели. Допускается только http �
 template - Путь к шаблону из папки agent. Шаблон должен быть в формате .yaml. По умолчанию использует свои шаблоны. 
 severity - Важность искомых угроз. По умолчанию ищет все.
 '''
-def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,medium,high,critical"):
+def run_nuclei(*, target_url: str, template: str = None, severity: str = "info,low,medium,high,critical", timeout: int = 120):
     output = {
             "success" : False,
             "output" : "",
@@ -22,7 +22,14 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
         command.extend(["-t", template])
 
     try:
-        nuclei = subprocess.run(command, capture_output=True, text=True)
+        nuclei = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+
+        if nuclei.returncode != 0:
+            raise RuntimeError(
+                f"Nuclei exited with code {nuclei.returncode}: "
+                f"{nuclei.stderr.strip()}"
+            )
+
         output["output"] = []
         for line in nuclei.stdout.strip().split('\n'):
             if line:
@@ -31,6 +38,10 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
                 except json.JSONDecodeError:
                     continue
         output["success"] = True
+
+    except subprocess.TimeoutExpired:
+        output["error"] = f"Nuclei timed out after {timeout} seconds"
+
     except Exception as e:
         output["error"] = f"Exception: {e}"
     
@@ -150,4 +161,4 @@ if __name__ == "__main__":
     result = run_zap(url="http://host.docker.internal:3000", do_ascan=False)
     print(result)
     TARGET_URL = "http://127.0.0.1:8080"
-    print(run_nuclei(TARGET_URL))
+    print(run_nuclei(target_url=TARGET_URL))

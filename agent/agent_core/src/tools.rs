@@ -585,13 +585,15 @@ pub async fn run_zap(
         template = "Template name from the agent folder (a .yaml file). \
                     If not specified, built-in Nuclei templates are used.",
         severity = "Comma-separated severity levels to search for \
-                    (info,low,medium,high,critical). Default: all."
+                    (info,low,medium,high,critical). Default: all.",
+        timeout = "Maximum total scan duration in seconds. Optional; defaults to 120."
     )
 )]
 pub async fn run_nuclei(
     target_url: String,
     template: Option<String>,
     severity: Option<String>,
+    timeout: Option<i32>
 ) -> Result<String, ToolExecutionError>
 {
     // Collect arguments
@@ -599,6 +601,7 @@ pub async fn run_nuclei(
     insert_arg(&mut args, "target_url", Some(target_url)); // required
     insert_arg(&mut args, "template", template);           // optional
     insert_arg(&mut args, "severity", severity);           // optional
+    insert_arg(&mut args, "timeout", timeout);
 
     // Call the Python function
     let res: Py<PyAny> = call_py_tool(ToolRequest {
