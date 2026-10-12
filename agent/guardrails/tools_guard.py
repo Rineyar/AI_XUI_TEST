@@ -73,8 +73,8 @@ def _guard_write_file(args):
 
 def _guard_make_request(args):
     url = urlsplit(args.get("url"))
-    if url.scheme.lower() != "https":
-        raise ValueError("Разрешены только HTTPS-запросы")
+    if url.scheme.lower() not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
     if not url.hostname:
         raise ValueError("В URL отсутствует имя хоста")
     if url.username or url.password:
