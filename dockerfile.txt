@@ -77,12 +77,12 @@ RUN pip install --no-cache-dir \
     semgrep==1.180.0 \
     && pip check
 
-# Установка пакетов для загрузки по http
+#Установка пакетов для загрузки по http
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Nuclei с доступом из path
+#Nuclei с доступом из path
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
 COPY --from=nuclei-templates-builder /nuclei-templates /agent/tools/nuclei-templates
 
