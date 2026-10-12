@@ -30,7 +30,7 @@ def _resolve_workspace_path(filename: str) -> Path:
 def find_files(*, pattern: str, path: str = ".") -> str:
     base = _resolve_workspace_path(path)
     matches = glob.glob(f"{base}/**/{pattern}", recursive=True)
-    unique = sorted(set(matches))
+    unique = sorted(set(str(Path(match).relative_to(WORKSPACE)) for match in matches))
     return "\n".join(unique) if unique else "(no matches)"
 
 
