@@ -35,7 +35,7 @@ def run_bandit(*, targets: list = ["."],
 
         if config_file is not None:
             config_file = str(files._resolve_workspace_path(config_file))
-            
+
         # Создаем конфигурация
         bc = b_config.BanditConfig(config_file)
         # Создаем менеджер
@@ -82,6 +82,17 @@ def run_semgrep(*, targets: list = ["."],
     }
 
     try:
+        targets = [
+            str(files._resolve_workspace_path(target))
+            for target in targets
+        ]
+
+        configs = [
+            config if config.startswith("p/")
+            else str(files._resolve_workspace_path(config))
+            for config in configs
+        ]
+
         # создаем команду
         cmd = ["semgrep", "scan", "--json", "--quiet", 
                "--metrics=off", f"--timeout={timeout}"] 
