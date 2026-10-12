@@ -238,7 +238,7 @@ async fn main()
 
         let prompt: &str = prompt.trim();
 
-        info!("Запрос - {}\t|\t{:?}", prompt, time_start.elapsed());
+        info!("Запрос:\n{:?}\n{:?}", prompt, time_start.elapsed());
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(prompt.to_string()))
