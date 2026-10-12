@@ -446,7 +446,7 @@ pub async fn find_files(pattern: String, path: Option<String>) -> Result<String,
     insert_arg(&mut args, "path", path);
 
     //Вызов
-    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "find_file", function: "find_files", args: Value::Object(args) }).await?;
+    let res: Py<PyAny> = call_py_tool( ToolRequest { module: "files", function: "find_files", args: Value::Object(args) }).await?;
 
     //Сбор результата
     return Python::attach(|py: Python<'_>|
