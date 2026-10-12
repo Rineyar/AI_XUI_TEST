@@ -67,43 +67,36 @@ ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
 ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
 
-#Добавить необходимые библиотеки питону
-RUN pip install --no-cache-dir requests bandit semgrep
+#Создание пользователя и Изолятора
+RUN useradd --create-home --uid 1000 --user-group agent && install -d -o root -g agent -m 1770 /agent/workspace
 
-# Установка пакетов для загрузки по http и распаковки zip архивов
-RUN apt-get update && apt-get install -y \
+#Добавить необходимые библиотеки питону
+RUN pip install --no-cache-dir \
+    requests==2.34.2 \
+    bandit==1.9.4 \
+    semgrep==1.180.0 \
+    && pip check
+
+# Установка пакетов для загрузки по http
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    wget \
-    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Nuclei с доступом из path
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
 COPY --from=nuclei-templates-builder /nuclei-templates /agent/tools/nuclei-templates
 
-#Рабочая область
-WORKDIR /agent
-
-# Загрузка шаблонов Nuclei (в tools?????)
-RUN wget -q https://github.com/projectdiscovery/nuclei-templates/archive/refs/heads/main.zip -O /tmp/templates.zip \
-    && unzip -q /tmp/templates.zip -d /agent/tools/ \
-    && mv /agent/tools/nuclei-templates-main /agent/tools/nuclei-templates \
-    && rm /tmp/templates.zip
-
-#Изолятор
-RUN mkdir -p /agent/workspace
-
-#Его файлы на тест
-COPY agent/agent_core/src /agent/workspace/self/agent_core
-COPY agent/tools /agent/workspace/self/tools
-COPY agent/guardrails /agent/workspace/self/guardrails
-COPY agent/skills /agent/workspace/self/skills
-
 #Взять собранный под контейнер ELF
 COPY --from=rust-builder /build/agent_core /agent/agent_core/agent_core
 
-#Создание пользователя, выдача прав
-RUN chmod +x /agent/agent_core/agent_core && useradd --create-home --uid 1000 agent && chown -R agent:agent /agent
+#Рабочая область
+WORKDIR /agent
+
+#Его файлы на тест
+COPY --chown=root:root agent/agent_core/src /agent/workspace/self/agent_core
+COPY --chown=root:root agent/tools /agent/workspace/self/tools
+COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
+COPY --chown=root:root agent/skills /agent/workspace/self/skills
 
 #На будущее сделать agent только read
 
