@@ -13,7 +13,7 @@ __tool_meta__ = {
 # Возвращает код ответа
 def make_get(url : str, params : dict | None = None):
     try:
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, timeout=(5, 15), allow_redirects=False)
         return r.status_code, ""
     except requests.RequestException as e:
         return None, f"GET failed: {e}"
@@ -21,7 +21,7 @@ def make_get(url : str, params : dict | None = None):
 # Возвращает json
 def make_post(url : str, data : dict | None = None):
     try:
-        r = requests.post(url, data=data)
+        r = requests.post(url, data=data, timeout=(5, 15), allow_redirects=False)
         return r.json(), ""
     except requests.RequestException as e:
         return None, f"POST failed: {e}"
