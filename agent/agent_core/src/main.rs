@@ -289,9 +289,20 @@ async fn main()
             {
                 let response: PromptResponse = response;
 
-                info!("\n{}\n{:#?}\n{:?}", response.output, response.usage, time_prompt.elapsed());
+                info!("{}\n\n{:#?}\n\n{:?}\n", response.output, response.usage, time_prompt.elapsed());
+
+                for call in response.completion_calls.iter()
+                {
+                    info!("\nLLM call №{}: {:?}\n", call.call_index, call.usage);
+                }
+
+                for call in response.completion_calls.iter()
+                {
+                    info!("\nLLM call №{} raw usage: {:?}\n", call.call_index, call.raw.get("usage"));
+                }
+
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(format!("{}\n{:?}", response.output, time_prompt.elapsed())))
+                Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
                 .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
             }
