@@ -9,3 +9,4 @@ Cargo.lock
 */workspace
 .idea
 /agent/tools/tools_py/__pycache__
+task.md
