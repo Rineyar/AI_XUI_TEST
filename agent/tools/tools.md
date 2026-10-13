@@ -104,6 +104,31 @@ Example:
 }
 ```
 
+## dump_env
+
+Returns available environment variables as a JSON-formatted string.
+
+Use when you need to inspect the agent's environment configuration.
+
+Arguments:
+- none
+
+Returns:
+- JSON string with fields `success`, `output`, `error`
+- On success, `output` contains a JSON-formatted string of environment variable names and values.
+- If any environment variable name contains a blacklisted string (currently `"MAIN_MODEL_API_KEY"`), the tool returns `success=false` instead of exposing the environment.
+- On failure, `error` contains `"Could not get the environment."`.
+- Individual sensitive variables are not filtered or redacted. Do not expose the returned values in user-facing reports.
+
+Example:
+```json
+{
+    "success": true,
+    "output": "{\n    \"PATH\": \"/usr/local/bin:/usr/bin\",\n    \"HOME\": \"/agent\"\n}",
+    "error": ""
+}
+```
+
 ## run_bandit
 Runs Bandit — a SAST tool for analyzing Python code security.  
 Use when you need to find potential vulnerabilities in Python code.
@@ -406,3 +431,4 @@ Example:
 `print('Hello, world!')`
 
 This tool is intended for text files, not binary data.
+
