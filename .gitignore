@@ -6,6 +6,7 @@ Cargo.lock
 **/*.env
 */logs
 *.rar
+*.zip
 */workspace
 .idea
 /agent/tools/tools_py/__pycache__
