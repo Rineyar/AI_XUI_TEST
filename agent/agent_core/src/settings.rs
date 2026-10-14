@@ -1,9 +1,4 @@
-/*Пока что они не нужны по раздельности*/
 pub static SYSTEM_PROMPT: &str = include_str!("../../system_prompt.md");
-pub static TOOLS: &str = include_str!("../../tools/tools.md");
-pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
-pub static SAST_SKILLS: &str = include_str!("../../skills/sast_skills.md");
-pub static DAST_SKILLS: &str = include_str!("../../skills/dast_skills.md");
 
 //system_prompt. Собирается из файлов на этапе компиляции
 /*
@@ -21,10 +16,22 @@ pub static FULL_PROMPT: &str = concat!(
 );
 */
 
+//Скиллы
+pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
+pub static SAST_SKILLS: &str = include_str!("../../skills/sast_skills.md");
+pub static DAST_SKILLS: &str = include_str!("../../skills/dast_skills.md");
+pub static DOCKER_SKILLS: &str = include_str!("../../skills/docker_skills.md");
+
+//Инструменты
+pub static MAIN_TOOLS: &str = include_str!("../../tools/main_tools.md");
+pub static SAST_TOOLS: &str = include_str!("../../tools/sast_tools.md");
+pub static DAST_TOOLS: &str = include_str!("../../tools/dast_tools.md");
+pub static DOCKER_TOOLS: &str = include_str!("../../tools/docker_tools.md");
+
 //Максимум вывовов модели
 pub const MAX_LLM_CALLS: usize = 200;
 
-//Ссылка на местную модель
+//Ссылка на сервер с моделью
 pub static MODEL_SERVER_URL: &str = "https://deepcode.ci.nsu.ru/api";
 
 //id модели
