@@ -11,3 +11,4 @@ Cargo.lock
 .idea
 /agent/tools/tools_py/__pycache__
 task.md
+/vega
