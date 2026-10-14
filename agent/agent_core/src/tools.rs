@@ -174,6 +174,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     .expect("Ошибка присоединения потока исполения");
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "create_container",
     description = "Create and start a new Docker sandbox container. Returns the container ID."
@@ -216,6 +217,7 @@ pub async fn create_container() -> Result<String, ToolExecutionError>
     return ret;
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "remove_container",
     description = "Remove a Docker sandbox container by its ID.",
@@ -262,6 +264,7 @@ pub async fn remove_container(id: String) -> Result<(), ToolExecutionError>
 
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "execute_command",
     description = "Execute a shell command inside a running Docker sandbox container. Returns command output and exit code.",
@@ -308,6 +311,7 @@ pub async fn execute_command(id: String, command: String) -> Result<String, Tool
     return Ok(format!("Exit code: {:?}\nOutput:\n{:?}", exit_code, output));
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_path",
     description = "Upload a file or directory from the agent workspace into a Docker sandbox container. Files and directories are packaged automatically.",
@@ -371,6 +375,7 @@ pub async fn send_path(id: String, local_path: String, remote_path: String) -> R
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_text",
     description = "Create or overwrite a UTF-8 text file directly inside a Docker sandbox container.",
@@ -431,6 +436,7 @@ pub async fn send_text(id: String, path: String, filename: String, content: Stri
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "download_path",
     description = "Download a file or directory from a Docker sandbox container and extract it into the agent workspace.",
@@ -484,6 +490,7 @@ pub async fn download_path(id: String, remote_path: String, local_path: String) 
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "read_container_file",
     description = "Read the UTF-8 contents of a text file inside a Docker sandbox container without saving it locally.",
