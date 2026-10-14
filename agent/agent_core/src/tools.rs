@@ -705,6 +705,7 @@ pub async fn directory_contents(path: Option<String>) -> Result<String, ToolExec
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_bandit",
     description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
@@ -739,6 +740,7 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_semgrep",
     description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
@@ -764,6 +766,7 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_zap",
     description = "Runs OWASP ZAP in Docker, scans the target URL \
@@ -802,6 +805,7 @@ pub async fn run_zap(
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_nuclei",
     description = "Runs Nuclei, scans the target URL using templates \
