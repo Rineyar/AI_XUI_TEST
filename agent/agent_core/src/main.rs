@@ -5,6 +5,7 @@ use rig::prelude::Agent; //Тип данных для агента
 use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 use rig::agent::PromptResponse; //Скрытый тип подробного ответа
+use rig::http_client::HeaderMap; //Для Vega id session
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
@@ -177,6 +178,17 @@ async fn main()
 
         "-V" =>
         {
+            let mut headers: HeaderMap = HeaderMap::new();
+
+            headers.insert(
+        "X-VEGA-Agent-Session",
+        var("VEGA_AGENT_SESSION_ID").inspect_err(|err|
+            error!("Отсутствует VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует VEGA_AGENT_SESSION_ID")
+            .parse().inspect_err(|err|
+            error!("Некорректный VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Некорректный VEGA_AGENT_SESSION_ID"));
+
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
             .api_key(var("OPENAI_API_KEY").inspect_err(|err|
             error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
@@ -184,6 +196,7 @@ async fn main()
             .base_url(var("OPENAI_BASE_URL").inspect_err(|err|
             error!("Отсутствует ссылка - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует ссылка")) //Передать ссылку
+            .http_headers(headers)
             .build().inspect_err(|err|
             error!("Сборка VEGA не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Сборка VEGA не удалась");
