@@ -120,7 +120,7 @@ docker compose run --rm agent -L
 docker compose run --rm agent -O
 
 docker compose run --name agent-auto agent -S
-docker cp agent-auto:/agent/tests/test_1/answer.md .\agent\logs\answer.md ~пример
+docker cp agent-auto:/agent/workspace/tests/test_1/answer.md .\agent\logs\answer.md ~пример
 docker rm agent-auto
 */
 
