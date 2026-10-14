@@ -31,7 +31,12 @@ use py_env::*;
 
 mod guards; //Гварды
 
-mod io; //Консоль
+//Консоль
+#[cfg(not(feature = "tui"))]
+#[path = "io_light.rs"]
+mod io;
+#[cfg(feature = "tui")]
+mod io;
 use io::*;
 
 //Для DinD
@@ -57,12 +62,15 @@ use container::*;
 
 /*
 # Полная сборка
+cargo build --release
 cross build --release --target x86_64-unknown-linux-gnu
 
 # Без Docker и Ratatui
+cargo build --release --no-default-features
 cross build --release --no-default-features --target x86_64-unknown-linux-gnu
 
 # Только Ratatui, без Docker
+cargo build --release --no-default-features --features tui
 cross build --release --no-default-features --features tui --target x86_64-unknown-linux-gnu
 */
 
