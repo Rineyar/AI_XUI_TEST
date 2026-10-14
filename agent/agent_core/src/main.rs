@@ -6,6 +6,7 @@ use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 use rig::agent::PromptResponse; //Скрытый тип подробного ответа
 use rig::http_client::HeaderMap; //Для Vega id session
+use rig::agent::WithBuilderTools; //Для последовательной сборки агента
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
@@ -33,7 +34,10 @@ mod guards; //Гварды
 mod io; //Консоль
 use io::*;
 
-mod container; //Для DinD
+//Для DinD
+#[cfg(feature = "docker")]
+mod container;
+#[cfg(feature = "docker")]
 use container::*;
 
 /*
@@ -51,7 +55,16 @@ use container::*;
 Заняться кешированием запросов и памятью
 */
 
-//cross build --release --target x86_64-unknown-linux-gnu
+/*
+# Полная сборка
+cross build --release --target x86_64-unknown-linux-gnu
+
+# Без Docker и Ratatui
+cross build --release --no-default-features --target x86_64-unknown-linux-gnu
+
+# Только Ratatui, без Docker
+cross build --release --no-default-features --features tui --target x86_64-unknown-linux-gnu
+*/
 
 //docker compose build
 //docker compose up -d
@@ -87,6 +100,7 @@ async fn main()
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
+    #[cfg(feature = "docker")]
     init_sandbox_manager(&time_start).await; //Изолятор
 
     let mut args_list: Vec<String> = args().collect();
@@ -229,31 +243,46 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    let agent: Agent = agent_builder
-    .preamble(SYSTEM_PROMPT) //System prompt
+    //Навесить базу
+    let agent_builder: AgentBuilder = agent_builder
+    .preamble(SYSTEM_PROMPT)
     .context(TOOLS)
     .context(MAIN_SKILLS)
     .context(SAST_SKILLS)
-    .context(DAST_SKILLS)
-    .tool(RunZap)
-    .tool(RunNuclei)
+    .context(DAST_SKILLS);
+
+    //Настройки
+    let agent_builder: AgentBuilder = agent_builder
+    .default_max_turns(MAX_LLM_CALLS); 
+
+    //Базовые инструменты
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
     .tool(DumpEnv)
     .tool(FindFiles)
-    .tool(DirectoryContents)
+    .tool(DirectoryContents);
+
+    //SAST + DAST
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
+    .tool(RunZap)
+    .tool(RunNuclei)
     .tool(RunBandit)
-    .tool(RunSemgrep)
+    .tool(RunSemgrep);
+
+    //Контейнер
+    #[cfg(feature = "docker")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(CreateContainer)
     .tool(RemoveContainer)
     .tool(ExecuteCommand)
     .tool(SendPath)
     .tool(SendText)
     .tool(DownloadPath)
-    .tool(ReadContainerFile)
-    .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
-    .build(); //Builder -> Agent построить короче
+    .tool(ReadContainerFile);
+
+    let agent: Agent = agent_builder.build(); //Builder -> Agent построить короче
 
     info!("Агент готов: {:?}", time_start.elapsed());
     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
