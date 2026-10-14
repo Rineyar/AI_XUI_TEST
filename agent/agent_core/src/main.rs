@@ -86,7 +86,9 @@ async fn main()
     let time_start: Instant = Instant::now();
 
     //Чтобы при вылете терминал отпустил
+    #[cfg(feature = "tui")]
     let default_panic = std::panic::take_hook();
+    #[cfg(feature = "tui")]
     std::panic::set_hook(Box::new(move |info|
     {
         restore_terminal();
@@ -103,7 +105,7 @@ async fn main()
 
     let (prompt_tx, mut prompt_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-    //Создать потоки
+    //Создать поток для консоли
     let console_thread: thread::JoinHandle<()> = spawn_console_thread(prompt_tx);
 
     dotenv().ok(); //Чтобы он мог .env подсосать
