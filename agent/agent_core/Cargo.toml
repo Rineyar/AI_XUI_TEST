@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["tui", "docker"]
+default = ["tui", "docker", "sast", "dast"]
 
 tui = [
     "dep:ratatui",
@@ -18,6 +18,9 @@ docker = [
     "dep:futures-util",
     "dep:tar"
 ]
+
+sast = []
+dast = []
 
 [dependencies]
 dotenvy = "0.15.7"
