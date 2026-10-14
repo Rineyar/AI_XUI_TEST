@@ -328,7 +328,8 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                                 let prompt: String = input.lines().join("\n");
 
                                 prompt_tx.send(prompt)
-                                    .expect("Main больше не принимает ввод");
+                                .inspect_err(|err| error!("Ошибка отправки запроса - {:?}", err))
+                                .expect("Ошибка отправки запроса");
 
                                 input = TextArea::default();
                             }
