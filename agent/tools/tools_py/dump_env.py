@@ -10,7 +10,7 @@ __tool_meta__ = {
 }
 
 # Можно будет расширить потом
-BLACK_LIST = ["PASSWORD", "TOKEN", "SECRET"]
+BLACK_LIST = ["MAIN_MODEL_API_KEY", "OPENROUTER_API_KEY", "DEEPSEEK_LOCAL_API_KEY"]
 
 # Проверяет вхождения слов из черного списка
 def is_env_secure(env : dict) -> bool:

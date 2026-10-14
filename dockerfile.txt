@@ -30,7 +30,7 @@ COPY agent/guardrails /build/agent/guardrails
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-    cargo build --release --locked \
+    cargo build --release \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
 #==========================================#
@@ -66,6 +66,7 @@ ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
 ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
+ENV AUTO=1
 
 #Создание пользователя и Изолятора
 RUN useradd --create-home --uid 1000 --user-group agent && install -d -o root -g agent -m 1770 /agent/workspace
@@ -111,6 +112,9 @@ USER agent
 
 #Скрипт запуска
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+#Задание для автономной работы
+COPY agent/task.md /agent/task.md
 
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
 CMD ["-S"]
