@@ -1,10 +1,12 @@
 /*Пока что они не нужны по раздельности*/
-// pub static SYSTEM_PROMPT: &str = include_str!("../../system_prompt.md");
-// pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
-// pub static SAST_SKILLS: &str = include_str!("../../skills/sast/sast_skills.md");
-// pub static DAST_SKILLS: &str = include_str!("../../skills/dast/dast_skills.md");
+pub static SYSTEM_PROMPT: &str = include_str!("../../system_prompt.md");
+pub static TOOLS: &str = include_str!("../../tools/tools.md");
+pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
+pub static SAST_SKILLS: &str = include_str!("../../skills/sast_skills.md");
+pub static DAST_SKILLS: &str = include_str!("../../skills/dast_skills.md");
 
 //system_prompt. Собирается из файлов на этапе компиляции
+/*
 pub static FULL_PROMPT: &str = concat!(
     "SYSTEM_PROMPT:\n",
     include_str!("../../system_prompt.md"),
@@ -17,18 +19,13 @@ pub static FULL_PROMPT: &str = concat!(
     "TOOLS:\n",
     include_str!("../../tools/tools.md")
 );
+*/
 
 //Максимум вывовов модели
-pub const MAX_LLM_CALLS: usize = 64;
+pub const MAX_LLM_CALLS: usize = 200;
 
-//Ссылка на модель на локалке
-pub static MODEL_LOCAL_URL: &str = "http://localhost:1234";
+//Ссылка на местную модель
+pub static MODEL_SERVER_URL: &str = "https://deepcode.ci.nsu.ru/api";
 
-//id модели на локалке
-pub static MODEL_LOCAL_ID: &str = "openai/gpt-oss-20b";
-
-//Ссылка на местный дипсик
-pub static DEEPSEEK_LOCAL_URL: &str = "https://deepcode.ci.nsu.ru/api";
-
-//id дисписка
-pub static MODEL_DEEPSEEK_ID: &str = "deepseek-ai/DeepSeek-V4-Flash-0731";
+//id модели
+pub static MODEL_SERVER_ID: &str = "qwen3.8-flash-next";

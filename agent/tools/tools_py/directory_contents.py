@@ -1,20 +1,31 @@
-import os
 import json
+import os
 
 __all__ = ["directory_contents"]
 
-'''
-path - путь к директории относительно папки agent
-Функция возвращает тип, размер и имя содержимого
-'''
-def directory_contents(*, path = "."):
+
+def directory_contents(*, path="."):
     contents = []
-    full_path = os.path.join("./agent", path)
+    full_path = os.path.abspath(os.path.join("./workspace", path))
     for entry in os.scandir(full_path):
-        if entry.is_dir():
-            kind = "DIR "  
-        else:
-            kind = "FILE"
+        kind = "DIR " if entry.is_dir() else "FILE"
         size = entry.stat().st_size
-        contents.append({"kind":kind, "size":size, "name":entry.name})
+        contents.append({"kind": kind, "size": size, "name": entry.name})
     return json.dumps(contents)
+
+
+# import os
+# import json
+# import files
+
+# __all__ = ["directory_contents"]
+
+
+# def directory_contents(*, path):
+#     full_path = files.resolve_projects_path(path)
+#     contents = []
+#     for entry in os.scandir(full_path):
+#         kind = "DIR " if entry.is_dir() else "FILE"
+#         size = entry.stat().st_size
+#         contents.append({"kind": kind, "size": size, "name": entry.name})
+#     return json.dumps(contents)

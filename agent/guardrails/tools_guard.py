@@ -1,20 +1,32 @@
+import ipaddress
 import json
+import os
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import path_guard
 import policy
 
-
-__all__ = ["guard_select", "guard_response"]
+__all__ = ["guard_response", "guard_select"]
 
 
 RISKS = {"critical", "high", "medium", "low", "info"}
-REQUIRED_FINDING_FIELDS = {"title", "risk", "confidence", "cwe", "path", "line", "potential_threat"}
+REQUIRED_FINDING_FIELDS = {
+    "title",
+    "risk",
+    "confidence",
+    "cwe",
+    "path",
+    "line",
+    "potential_threat",
+}
 
 SECRET_PATTERNS = (re.compile(r"\bgh[opusr]_[A-Za-z0-9]{20,}\b"),)
-NAMED_SECRET = re.compile(r"(?i)\b(?:password|passwd|token|secret|api[_-]?key|access[_-]?key)"
-                          r"\s*[:=]\s*[\"']?([^\s\"',;}{]{6,})")
+NAMED_SECRET = re.compile(
+    r"(?i)\b(?:password|passwd|token|secret|api[_-]?key|access[_-]?key)"
+    r"\s*[:=]\s*[\"']?([^\s\"',;}{]{6,})"
+)
 
 SAFE_VALUES = {"redacted", "[redacted]", "<redacted>", "placeholder", "example"}
 
@@ -22,11 +34,13 @@ TOOL_GUARDS = {
     "read_file": lambda args: _guard_read_file(args),
     "write_file": lambda args: _guard_write_file(args),
     "make_request": lambda args: _guard_make_request(args),
-    # "dump_env": lambda args: _guard_dump_env(args),
+    "dump_env": lambda args: _guard_dump_env(args),
     "find_files": lambda args: _guard_find_files(args),
     "directory_contents": lambda args: _guard_directory_contents(args),
     "run_bandit": lambda args: _guard_run_bandit(args),
     "run_semgrep": lambda args: _guard_run_semgrep(args),
+    "run_nuclei": lambda args: _guard_run_nuclei(args),
+    "run_zap": lambda args: _guard_run_zap(args),
 }
 
 
@@ -35,17 +49,20 @@ def guard_select(request):
         function = request.get("function")
         args = request.get("args")
 
+        if function in policy.TOOLS_IN_TEST:
+            return {"allowed": True, "reason": "Unsafe Testing!"}
+
         guard = TOOL_GUARDS.get(function)
         if guard is None:
-            return _deny("for that tool there is no guardrails yet") # for that tool there is no guardrails yet
+            return _deny("Для инструмента нет guard-функции")
         if function not in policy.ALLOWED_TOOLS:
-            return _deny("Tool is prohibited ") # Tool is prohibited
+            return _deny("Инструмент запрещён")
 
         guard(args)
-    except Exception as error:
+    except (AttributeError, KeyError, OSError, TypeError, ValueError) as error:
         return _deny(str(error))
 
-    return {"allowed": True, "reason": "Allowed"}
+    return {"allowed": True, "reason": "Allow"}
 
 
 def _deny(reason):
@@ -59,37 +76,37 @@ def _guard_read_file(args):
 def _guard_write_file(args):
     path_guard.check_write_path(args.get("filename"))
     if "text" not in args:
-        raise ValueError("Text to write not specified ") # Text to write not specified
+        raise ValueError("Не указан текст для записи")
     if len(args.get("text").encode("utf-8")) > policy.MAX_FILE_SIZE:
-        raise ValueError("text is bigger than 1000000 bytes") # text is bigger than 1000000 bytes
+        raise ValueError("Записываемый файл превышает допустимый размер")
 
 
 def _guard_make_request(args):
     url = urlsplit(args.get("url"))
-    if url.scheme.lower() != "https":
-        raise ValueError("allowed only https requests ") # allowed only https requests
+    if url.scheme.lower() not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
     if not url.hostname:
-        raise ValueError("host name is missing in url") # host name is missing in url
+        raise ValueError("В URL отсутствует имя хоста")
     if url.username or url.password:
-        raise ValueError("privet data is prohibited ") # privet data is prohibited
+        raise ValueError("Учётные данные в URL запрещены")
 
     if args.get("req_type", "get").lower() not in {"get", "post"}:
-        raise ValueError("only get and post requests are allowed") # only get and post requests are allowed
+        raise ValueError("Разрешены только GET и POST запросы")
 
 
 # Исправить
-# def _guard_dump_env(args):
-#     if args:
-#         raise ValueError("dump_env не принимает аргументы")
+def _guard_dump_env(args):
+    if args:
+        raise ValueError("dump_env не принимает аргументы")
 
 
 def _guard_find_files(args):
     path_guard.check_path(args.get("path", "."), directory=True)
     pattern = args.get("pattern")
     if not pattern or len(pattern) > 100:
-        raise ValueError("Incorrect template for search") # Incorrect template for search
+        raise ValueError("Некорректный шаблон поиска")
     if ".." in pattern or "/" in pattern or "\\" in pattern:
-        raise ValueError("template must have name, but not a path") # template must have name, but not a path
+        raise ValueError("Шаблон должен описывать имя, а не путь")
 
 
 def _guard_directory_contents(args):
@@ -105,13 +122,13 @@ def _guard_run_bandit(args):
         path_guard.check_path(config_file, directory=False)
 
     if args.get("agg_type", "vuln") not in {"vuln", "file", "baseline"}:
-        raise ValueError("agg_type for Bandit is invalid") # agg_type for Bandit is invalid
+        raise ValueError("Недопустимый agg_type для Bandit")
     if args.get("sev_level", "LOW").upper() not in {"LOW", "MEDIUM", "HIGH"}:
-        raise ValueError("sev_level for Bandit is invalid") # sev_level for Bandit is invalid
+        raise ValueError("Недопустимый sev_level для Bandit")
     if args.get("conf_level", "LOW").upper() not in {"LOW", "MEDIUM", "HIGH"}:
-        raise ValueError("conf_level for Bandit is invalid") # conf_level for Bandit is invalid
+        raise ValueError("Недопустимый conf_level для Bandit")
     if args.get("recursive", True) not in {True, False}:
-        raise ValueError("recursive value is invalid") # recursive value is invalid
+        raise ValueError("Недопустимое значение recursive")
 
 
 def _guard_run_semgrep(args):
@@ -125,7 +142,94 @@ def _guard_run_semgrep(args):
 
     timeout = args.get("timeout", 5)
     if timeout < 1 or timeout > 60:
-        raise ValueError("Timeout Semgrep have to be beetwen 1 or 60 seconds ") # Timeout Semgrep have to be beetwen 1 or 60 seconds
+        raise ValueError("Timeout Semgrep должен быть от 1 до 60 секунд")
+
+
+def _host_is_local(hostname: str) -> bool:
+    if hostname in {
+        "localhost",
+        "localhost.localdomain",
+        "ip6-localhost",
+        "ip6-loopback",
+        "host.docker.internal",
+        "gateway.docker.internal",
+        "kubernetes.docker.internal",
+        "host.containers.internal",
+    }:
+        return True
+
+    if hostname.endswith(".local"):
+        return True
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_unspecified
+        or ip.is_reserved
+    )
+
+
+def _guard_run_nuclei(args):
+    template = args.get("template")
+    target_url = urlsplit(args.get("target_url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
+    if template:
+        root = Path(os.environ["NUCLEI_TEMPLATES_DIR"]).resolve(strict=True)
+        requested = Path(template)
+
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к шаблону")
+
+        target = (root / requested).resolve(strict=True)
+
+        if not target.is_relative_to(root):
+            raise ValueError("Шаблон находится вне каталога Nuclei")
+
+        if not target.is_dir() and not (
+            target.is_file() and target.suffix.lower() in (".yaml", ".yml")
+        ):
+            raise ValueError("Ожидался каталог или YAML-шаблон Nuclei")
+
+    severity = args.get("severity", "info,low,medium,high,critical")
+
+    levels = [level.strip().lower() for level in severity.split(",")]
+
+    if not levels or any(level not in RISKS for level in levels):
+        raise ValueError("Недопустимый уровень риска")
+
+    timeout = args.get("timeout", 120)
+
+    if (
+        not isinstance(timeout, int)
+        or isinstance(timeout, bool)
+        or not 1 <= timeout <= 600
+    ):
+        raise ValueError("Nuclei timeout должен быть от 1 до 600 секунд")
+
+
+def _guard_run_zap(args):
+    target_url = urlsplit(args.get("url"))
+    target_host = target_url.hostname
+
+    if target_url.scheme not in ("http", "https"):
+        raise ValueError("Разрешены только HTTP и HTTPS запросы")
+    if not target_host:
+        raise ValueError("В URL отсутствует имя хоста")
+    if not _host_is_local(target_host.strip("[]").lower()):
+        raise ValueError("Адрес не является локальным")
 
 
 def guard_response(response):
@@ -134,53 +238,53 @@ def guard_response(response):
         findings = report["findings"]
 
         if _contains_secret(json.dumps(report, ensure_ascii=False)):
-            return _deny("Respond have a potential privet data") # Respond have a potential privet data
+            return _deny("Ответ содержит потенциальные секретные данные")
 
         for number, finding in enumerate(findings, start=1):
             error = _check_finding(finding)
             if error:
-                return _deny(f"Finding {number}: {error}")
-    except Exception as error:
-        return _deny(f"Incorrenct respond : {error}")
+                return _deny(f"Находка {number}: {error}")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+        return _deny(f"Некорректный ответ: {error}")
 
-    return {"allowed": True, "reason": "Respond pass the all checks"}
+    return {"allowed": True, "reason": "Ответ прошёл проверку"}
 
 
 def _check_finding(finding):
     missing = REQUIRED_FINDING_FIELDS - finding.keys()
     if missing:
-        return f"Missing name: {', '.join(sorted(missing))}"
+        return f"отсутствуют поля: {', '.join(sorted(missing))}"
 
     text_fields = ("title", "potential_threat")
     for field in text_fields:
         if not finding[field].strip():
-            return "Text fields could not be empty" # Text fields could not be empty
+            return "текстовые поля не должны быть пустыми"
 
     risk = finding["risk"]
     if risk.lower() not in RISKS:
-        return "incorrect type of a risk ['critical', 'high', 'medium', 'low', 'info']" # incorrect type of a risk ["critical", "high", "medium", "low", "info"]
+        return "указан недопустимый risk"
 
     confidence = finding["confidence"]
     if not 0 <= confidence <= 1:
-        return "confidence have to be float from 0 to 1" # confidence have to be float from 0 to 1
+        return "confidence должен быть числом от 0 до 1"
 
     cwe = finding["cwe"]
     if not re.fullmatch(r"CWE-[0-9]+", cwe):
-        return "CWE have to be in format CWE-N" # CWE have to be in format CWE-N
+        return "CWE должен иметь формат CWE-N"
 
     try:
         source = path_guard.check_path(finding["path"])
-    except Exception as error:
-        return f"incorrect path: {error}" # incorrect path
+    except (OSError, TypeError, ValueError) as error:
+        return f"некорректный путь: {error}"
 
     line = finding["line"]
     if line < 1:
-        return "line have to be a positive number" # line have to be a positive number
+        return "line должен быть положительным целым числом"
 
     with source.open("r", encoding="utf-8", errors="replace") as file:
         line_count = sum(1 for _ in file)
     if line > max(line_count, 1):
-        return "no specified line in file" #  no specified line in file
+        return "указанная строка отсутствует в файле"
 
     return None
 
@@ -196,4 +300,3 @@ def _contains_secret(value):
             return True
 
     return False
-
