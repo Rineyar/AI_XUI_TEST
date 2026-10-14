@@ -60,7 +60,65 @@ use container::*;
 Заняться кешированием запросов и памятью
 */
 
+/*
+================== СБОРКА ==================
 
+# Полная сборка (TUI + Docker + SAST + DAST)
+cargo build --release
+cross build --release --target x86_64-unknown-linux-gnu
+
+# Облегчённая (только базовые инструменты + io_light)
+cargo build --release --no-default-features
+cross build --release --no-default-features --target x86_64-unknown-linux-gnu
+
+# Облегчённая + SAST
+cargo build --release --no-default-features --features sast
+cross build --release --no-default-features --features sast --target x86_64-unknown-linux-gnu
+
+# Облегчённая + DAST
+cargo build --release --no-default-features --features dast
+cross build --release --no-default-features --features dast --target x86_64-unknown-linux-gnu
+
+# Облегчённая + SAST + DAST
+cargo build --release --no-default-features --features "sast dast"
+cross build --release --no-default-features --features "sast dast" --target x86_64-unknown-linux-gnu
+
+# TUI + SAST + DAST (без Docker)
+cargo build --release --no-default-features --features "tui sast dast"
+cross build --release --no-default-features --features "tui sast dast" --target x86_64-unknown-linux-gnu
+
+# Docker + SAST + DAST (без TUI)
+cargo build --release --no-default-features --features "docker sast dast"
+cross build --release --no-default-features --features "docker sast dast" --target x86_64-unknown-linux-gnu
+
+
+================== ЗАПУСК ==================
+
+# Из каталога agent_core/
+cargo run --release -- -S
+
+# Из каталога agent/ (облегчённый)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features -- -S
+
+# Из каталога agent/ (SAST + DAST, без Docker и TUI)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features --features "sast dast" -- -S
+
+# Из каталога agent/ (полная сборка)
+cargo run --manifest-path ./agent_core/Cargo.toml --release -- -S
+
+
+================== DOCKER ==================
+
+docker compose build
+docker compose up -d
+docker attach agent-core
+
+# Ctrl+P, Ctrl+Q — отсоединиться, не останавливая контейнер
+
+docker compose run --rm agent -S
+docker compose run --rm agent -L
+docker compose run --rm agent -O
+*/
 
 #[tokio::main] //Асинк рантайм - база
 async fn main()
