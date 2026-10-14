@@ -6,10 +6,14 @@ use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
-use std::collections::HashMap; //Они кста тут живут  
+use std::collections::HashMap; //Они кста тут живут
+
+#[cfg(feature = "docker")]
 use std::path::{Path, PathBuf}; //Для путей к конту и вне
+#[cfg(feature = "docker")]
 use std::ffi::OsStr; //Путь для имени архива
 
+#[cfg(feature = "docker")]
 use tar::{Builder, Header, Archive, Entries, Entry}; //Упаковка файлов для конта
 
 use tracing::{error, info, warn}; //Логи
@@ -17,6 +21,8 @@ use tracing::{error, info, warn}; //Логи
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
 use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
+
+#[cfg(feature = "docker")]
 use crate::container; //Функции для работы с контом
 
 //Для PyEnv
@@ -174,6 +180,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     .expect("Ошибка присоединения потока исполения");
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "create_container",
     description = "Create and start a new Docker sandbox container. Returns the container ID."
@@ -216,6 +223,7 @@ pub async fn create_container() -> Result<String, ToolExecutionError>
     return ret;
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "remove_container",
     description = "Remove a Docker sandbox container by its ID.",
@@ -262,6 +270,7 @@ pub async fn remove_container(id: String) -> Result<(), ToolExecutionError>
 
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "execute_command",
     description = "Execute a shell command inside a running Docker sandbox container. Returns command output and exit code.",
@@ -308,6 +317,7 @@ pub async fn execute_command(id: String, command: String) -> Result<String, Tool
     return Ok(format!("Exit code: {:?}\nOutput:\n{:?}", exit_code, output));
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_path",
     description = "Upload a file or directory from the agent workspace into a Docker sandbox container. Files and directories are packaged automatically.",
@@ -371,6 +381,7 @@ pub async fn send_path(id: String, local_path: String, remote_path: String) -> R
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_text",
     description = "Create or overwrite a UTF-8 text file directly inside a Docker sandbox container.",
@@ -431,6 +442,7 @@ pub async fn send_text(id: String, path: String, filename: String, content: Stri
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "download_path",
     description = "Download a file or directory from a Docker sandbox container and extract it into the agent workspace.",
@@ -484,6 +496,7 @@ pub async fn download_path(id: String, remote_path: String, local_path: String) 
     return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "read_container_file",
     description = "Read the UTF-8 contents of a text file inside a Docker sandbox container without saving it locally.",
@@ -692,6 +705,7 @@ pub async fn directory_contents(path: Option<String>) -> Result<String, ToolExec
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_bandit",
     description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
@@ -726,6 +740,7 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_semgrep",
     description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
@@ -751,6 +766,7 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_zap",
     description = "Runs OWASP ZAP in Docker, scans the target URL \
@@ -789,6 +805,7 @@ pub async fn run_zap(
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_nuclei",
     description = "Runs Nuclei, scans the target URL using templates \

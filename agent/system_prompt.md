@@ -17,7 +17,7 @@ Base your actions and conclusions on the user's task, available capabilities, an
 - Use only the operations necessary to complete the task.
 - If a required capability is unavailable, report the limitation clearly.
 
-Refer to `tools.md` for tool interfaces and available operations.
+Refer to `*_tools.md` for tool interfaces and available operations.
 
 # Workspace and Environment
 

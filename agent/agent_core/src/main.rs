@@ -6,6 +6,7 @@ use rig::agent::AgentBuilder; //Тип для билдера
 use rig::providers::{openai::CompletionsClient, openai::OpenAICompletionsExt}; //Для дипсика местного разлива
 use rig::agent::PromptResponse; //Скрытый тип подробного ответа
 use rig::http_client::HeaderMap; //Для Vega id session
+use rig::agent::WithBuilderTools; //Для последовательной сборки агента
 
 use std::mem; //Для take, чтобы по красоте
 use std::time::Instant; //Таймер
@@ -30,10 +31,18 @@ use py_env::*;
 
 mod guards; //Гварды
 
-mod io; //Консоль
+//Консоль
+#[cfg(not(feature = "tui"))]
+#[path = "io_light.rs"]
+mod io;
+#[cfg(feature = "tui")]
+mod io;
 use io::*;
 
-mod container; //Для DinD
+//Для DinD
+#[cfg(feature = "docker")]
+mod container;
+#[cfg(feature = "docker")]
 use container::*;
 
 /*
@@ -51,21 +60,75 @@ use container::*;
 Заняться кешированием запросов и памятью
 */
 
-//cross build --release --target x86_64-unknown-linux-gnu
+/*
+================== СБОРКА ==================
 
-//docker compose build
-//docker compose up -d
-//docker attach agent-core
-//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
-//docker compose run --rm agent -L тест на локалке
-//docker compose run --rm agent -O
+# Полная сборка (TUI + Docker + SAST + DAST)
+cargo build --release
+cross build --release --target x86_64-unknown-linux-gnu
+
+# Облегчённая (только базовые инструменты + io_light)
+cargo build --release --no-default-features
+cross build --release --no-default-features --target x86_64-unknown-linux-gnu
+
+# Облегчённая + SAST
+cargo build --release --no-default-features --features sast
+cross build --release --no-default-features --features sast --target x86_64-unknown-linux-gnu
+
+# Облегчённая + DAST
+cargo build --release --no-default-features --features dast
+cross build --release --no-default-features --features dast --target x86_64-unknown-linux-gnu
+
+# Облегчённая + SAST + DAST
+cargo build --release --no-default-features --features "sast dast"
+cross build --release --no-default-features --features "sast dast" --target x86_64-unknown-linux-gnu
+
+# TUI + SAST + DAST (без Docker)
+cargo build --release --no-default-features --features "tui sast dast"
+cross build --release --no-default-features --features "tui sast dast" --target x86_64-unknown-linux-gnu
+
+# Docker + SAST + DAST (без TUI)
+cargo build --release --no-default-features --features "docker sast dast"
+cross build --release --no-default-features --features "docker sast dast" --target x86_64-unknown-linux-gnu
+
+
+================== ЗАПУСК ==================
+
+# Из каталога agent_core/
+cargo run --release -- -S
+
+# Из каталога agent/ (облегчённый)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features -- -S
+
+# Из каталога agent/ (SAST + DAST, без Docker и TUI)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features --features "sast dast" -- -S
+
+# Из каталога agent/ (полная сборка)
+cargo run --manifest-path ./agent_core/Cargo.toml --release -- -S
+
+
+================== DOCKER ==================
+
+docker compose build
+docker compose up -d
+docker attach agent-core
+
+# Ctrl+P, Ctrl+Q — отсоединиться, не останавливая контейнер
+
+docker compose run --rm agent -S
+docker compose run --rm agent -L
+docker compose run --rm agent -O
+*/
+
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
     let time_start: Instant = Instant::now();
 
     //Чтобы при вылете терминал отпустил
+    #[cfg(feature = "tui")]
     let default_panic = std::panic::take_hook();
+    #[cfg(feature = "tui")]
     std::panic::set_hook(Box::new(move |info|
     {
         restore_terminal();
@@ -82,11 +145,12 @@ async fn main()
 
     let (prompt_tx, mut prompt_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-    //Создать потоки
+    //Создать поток для консоли
     let console_thread: thread::JoinHandle<()> = spawn_console_thread(prompt_tx);
 
     dotenv().ok(); //Чтобы он мог .env подсосать
 
+    #[cfg(feature = "docker")]
     init_sandbox_manager(&time_start).await; //Изолятор
 
     let mut args_list: Vec<String> = args().collect();
@@ -229,36 +293,68 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    let agent: Agent = agent_builder
-    .preamble(SYSTEM_PROMPT) //System prompt
-    .context(TOOLS)
+    //Навесить базу
+    let agent_builder: AgentBuilder = agent_builder
+    .preamble(SYSTEM_PROMPT)
     .context(MAIN_SKILLS)
+    .context(MAIN_TOOLS);
+
+    //Настройки
+    let agent_builder: AgentBuilder = agent_builder
+    .default_max_turns(MAX_LLM_CALLS);
+
+    #[cfg(feature = "sast")]
+    let agent_builder: AgentBuilder = agent_builder
     .context(SAST_SKILLS)
+    .context(SAST_TOOLS);
+
+    #[cfg(feature = "dast")]
+    let agent_builder: AgentBuilder = agent_builder
     .context(DAST_SKILLS)
-    .tool(RunZap)
-    .tool(RunNuclei)
+    .context(DAST_TOOLS);
+
+    #[cfg(feature = "docker")]
+    let agent_builder: AgentBuilder = agent_builder
+    .context(DOCKER_SKILLS)
+    .context(DOCKER_TOOLS);
+
+    //Базовые инструменты
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(ReadFile)
     .tool(WriteFile)
     .tool(HttpRequest)
     .tool(DumpEnv)
     .tool(FindFiles)
-    .tool(DirectoryContents)
+    .tool(DirectoryContents);
+
+    //SAST + DAST
+    #[cfg(feature = "sast")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(RunBandit)
-    .tool(RunSemgrep)
+    .tool(RunSemgrep);
+
+    #[cfg(feature = "dast")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
+    .tool(RunZap)
+    .tool(RunNuclei);
+
+    //Контейнер
+    #[cfg(feature = "docker")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(CreateContainer)
     .tool(RemoveContainer)
     .tool(ExecuteCommand)
     .tool(SendPath)
     .tool(SendText)
     .tool(DownloadPath)
-    .tool(ReadContainerFile)
-    .default_max_turns(MAX_LLM_CALLS) //Максимум обращений к модели
-    .build(); //Builder -> Agent построить короче
+    .tool(ReadContainerFile);
+
+    let agent: Agent = agent_builder.build(); //Builder -> Agent построить короче
 
     info!("Агент готов: {:?}", time_start.elapsed());
     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
     Out::Text(format!("Агент готов: {:?}", time_start.elapsed())))
-    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
     let auto: bool = match var("AUTO")
@@ -266,14 +362,26 @@ async fn main()
         Ok(var) =>
         {
             info!("Параметр запуска обнаружен");
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(String::from("Параметр запуска обнаружен")))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Ошибка связи с консолью");
 
             if var == "1"
             {
                 info!("Переход в автоматический режим...");
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(String::from("Переход в автоматический режим...")))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
+                .expect("Ошибка связи с консолью");
 
                 true
             } else {
                 info!("Переход в ручной режим...");
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(String::from("Переход в ручной режим...")))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
+                .expect("Ошибка связи с консолью");
 
                 false
             }
@@ -282,6 +390,10 @@ async fn main()
         Err(_) =>
         {
             info!("Параметр запуска не обнаружен");
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(String::from("Параметр запуска не обнаружен")))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Ошибка связи с консолью");
 
             false
         }
@@ -299,14 +411,14 @@ async fn main()
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(prompt.to_string()))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
         let time_prompt: Instant = Instant::now();
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(String::from("Запрос передан в обработку...")))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
@@ -348,7 +460,7 @@ async fn main()
                 error!("Ошибка ответа!\n{:?}", err);
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                 Out::Text(format!("Ошибка ответа!\n{:?}", err)))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:#?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
             }
         }
