@@ -19,7 +19,6 @@ pub enum Out
     CompressedStart,
     Text(String),
     CompressedEnd,
-    Toggle(usize),
     Clear,
     Shutdown
 }
