@@ -6,10 +6,14 @@ use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
-use std::collections::HashMap; //Они кста тут живут  
+use std::collections::HashMap; //Они кста тут живут
+
+#[cfg(feature = "docker")]
 use std::path::{Path, PathBuf}; //Для путей к конту и вне
+#[cfg(feature = "docker")]
 use std::ffi::OsStr; //Путь для имени архива
 
+#[cfg(feature = "docker")]
 use tar::{Builder, Header, Archive, Entries, Entry}; //Упаковка файлов для конта
 
 use tracing::{error, info, warn}; //Логи
@@ -17,6 +21,8 @@ use tracing::{error, info, warn}; //Логи
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
 use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
+
+#[cfg(feature = "docker")]
 use crate::container; //Функции для работы с контом
 
 //Для PyEnv
