@@ -274,7 +274,7 @@ async fn main()
 
     if auto
     {
-        let task: String = read_to_string("task.md")
+        let task: String = read_to_string("strategy.md")
         .inspect_err(|err| error!("Ошибка чтения задания в AUTO режиме - {:?}", err))
         .expect("Ошибка чтения задания в AUTO режиме");
 
@@ -337,8 +337,7 @@ async fn main()
                 .expect("Ошибка связи с консолью");
             }
         }
-    } else 
-    {
+    } else {
         loop //Общение с душевнобольным
         {
             let prompt: String = match prompt_rx.recv().await
