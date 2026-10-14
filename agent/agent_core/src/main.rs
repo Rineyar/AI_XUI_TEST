@@ -68,10 +68,12 @@ cross build --release --target x86_64-unknown-linux-gnu
 # Без Docker и Ratatui
 cargo build --release --no-default-features
 cross build --release --no-default-features --target x86_64-unknown-linux-gnu
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features -- -S
 
 # Только Ratatui, без Docker
 cargo build --release --no-default-features --features tui
 cross build --release --no-default-features --features tui --target x86_64-unknown-linux-gnu
+
 */
 
 //docker compose build
