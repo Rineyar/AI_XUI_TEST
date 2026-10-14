@@ -111,7 +111,7 @@ USER agent
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 #Задание для автономной работы
-COPY agent/task.md /agent/task.md
+COPY agent/strategy.md /agent/strategy.md
 
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
 CMD ["-S"]
