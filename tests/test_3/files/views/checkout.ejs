@@ -1,0 +1,72 @@
+<h1>Checkout</h1>
+<% if (typeof error !== 'undefined' && error) { %><p class="error-box"><%= error %></p><% } %>
+<% if (typeof result !== 'undefined' && result) { %>
+  <div class="ok-box">
+    Order <a href="/orders/<%= result.orderId %>">#<%= result.orderId %></a> confirmed —
+    charged <%= (result.amount / 100).toFixed(2) %> € (test card).
+    <% if (typeof logged === 'undefined' || !logged) { %>
+      <p class="muted">Bought as guest. Want order history? <a href="/register">Create an account</a>.</p>
+    <% } %>
+  </div>
+<% } %>
+
+<div class="checkout-grid">
+  <form method="post" action="/checkout" class="checkout-form">
+    <h2>Product</h2>
+    <div class="bb-row">
+      <label for="pid">Product ID</label>
+      <input id="pid" name="product_id" value="1">
+    </div>
+    <div class="bb-row">
+      <label for="pname">Product name</label>
+      <input id="pname" name="product_name" value="Mechanical Keyboard MK-ULTRA">
+    </div>
+    <div class="bb-row">
+      <label for="qty">Quantity</label>
+      <input id="qty" name="quantity" value="1" inputmode="numeric">
+    </div>
+    <div class="bb-row">
+      <label for="amt">Amount (cents)</label>
+      <!-- VULN (A06): amount_cents is client-controlled. -->
+      <input id="amt" name="amount_cents" value="12900" inputmode="numeric">
+    </div>
+
+    <h2>Shipping</h2>
+    <div class="bb-row">
+      <label for="addr">Address</label>
+      <input id="addr" name="address" value="" placeholder="Street, number, city" required>
+    </div>
+
+    <h2>Payment</h2>
+    <div class="bb-cols">
+      <div class="bb-row">
+        <label for="card">Card number</label>
+        <input id="card" name="card_number" value="" placeholder="4242 4242 4242 4242" autocomplete="off" required>
+      </div>
+      <div class="bb-row">
+        <label for="cvv">CVV</label>
+        <input id="cvv" name="cvv" value="" placeholder="123" autocomplete="off" required>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary btn-buy">Pay now</button>
+    <p class="bb-note">Payments are simulated. Use a test card number.</p>
+  </form>
+
+  <aside class="checkout-side">
+    <h2>Order summary</h2>
+    <div class="summary-row"><span>Subtotal</span><strong>—</strong></div>
+    <div class="summary-row"><span>Shipping</span><strong>Free*</strong></div>
+    <div class="summary-row"><span>Total</span><strong>whatever you type</strong></div>
+    <p class="muted small">*Physical delivery not included. The summary reflects what the <em>client</em> sends — see the amount field.</p>
+    <% if (typeof logged === 'undefined' || !logged) { %>
+      <div class="side-login">
+        <p>Buying as <strong>guest</strong>.</p>
+        <p class="muted">No account needed. <a href="/login?returnurl=/checkout">Log in</a> or <a href="/register">register</a> for order history.</p>
+      </div>
+    <% } else { %>
+      <div class="side-login">
+        <p>Buying as <strong><%= typeof username !== 'undefined' ? username : '' %></strong>.</p>
+      </div>
+    <% } %>
+  </aside>
+</div>

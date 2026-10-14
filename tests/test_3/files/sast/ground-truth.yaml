@@ -1,0 +1,51 @@
+# Vulnerability descriptions for the standalone code snippets in seeds/.
+seeds:
+  - file: sqli-concat.js
+    cwe: CWE-89
+    title: SQL injection via string concatenation
+    sink: queryUser
+  - file: nosql-operator.js
+    cwe: CWE-943
+    title: NoSQL operator injection from user JSON
+    sink: findUser
+  - file: xss-raw-echo.js
+    cwe: CWE-79
+    title: Reflected XSS in HTML response
+    sink: renderPage
+  - file: path-traversal.js
+    cwe: CWE-22
+    title: Path traversal via unsanitized join
+    sink: readFileFor
+  - file: ssrf-fetch.js
+    cwe: CWE-918
+    title: SSRF via user-controlled URL
+    sink: proxyFetch
+  - file: eval-code.js
+    cwe: CWE-95
+    title: Code injection through eval
+    sink: computeExpression
+  - file: crypto-weak.js
+    cwe: CWE-327
+    title: Weak hash algorithm for passwords
+    sink: hashPassword
+  - file: hardcoded-secret.js
+    cwe: CWE-798
+    title: Hardcoded API secret
+    sink: getConfig
+  - file: redos-nested.js
+    cwe: CWE-1333
+    title: Catastrophic backtracking regex
+    sink: validateInput
+  - file: prototype-pollution.js
+    cwe: CWE-1321
+    title: Prototype pollution via unguarded merge
+    sink: deepMerge
+  - file: open-redirect.js
+    cwe: CWE-601
+    title: Open redirect from query parameter
+    sink: handleRedirect
+  - file: deserialization.js
+    cwe: CWE-502
+    title: Unsafe deserialization to JS object
+    sink: loadState
+

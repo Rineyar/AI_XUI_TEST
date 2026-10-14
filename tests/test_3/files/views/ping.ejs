@@ -1,0 +1,10 @@
+<h1>Network diagnostics</h1>
+<p class="muted">Ping a host to check reachability from the server. Uses the system <code>ping</code> binary.</p>
+<form method="post" action="/tools/ping" class="form">
+  <label>Host or IP <input name="host" value="<%= host %>" placeholder="127.0.0.1" required></label>
+  <button type="submit" class="btn btn-primary">Ping</button>
+</form>
+<% if (typeof output !== 'undefined' && output) { %>
+  <h2>Output</h2>
+  <pre class="response"><%= output %></pre>
+<% } %>

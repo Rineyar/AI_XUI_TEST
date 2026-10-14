@@ -1,0 +1,12 @@
+<h1>Log in</h1>
+<% if (typeof error !== 'undefined' && error) { %><p class="error-box"><%= error %></p><% } %>
+<div class="auth-card">
+  <form method="post" action="/login/auth" class="form">
+    <input type="hidden" name="returnurl" value="<%= typeof returnurl !== 'undefined' ? returnurl : '' %>">
+    <label>Username <input name="username" autofocus required autocomplete="username"></label>
+    <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+    <button type="submit" class="btn btn-primary">Log in</button>
+  </form>
+</div>
+<p class="auth-alt">No account? <a href="/register">Register</a> — or keep browsing, you only need an account to review and keep order history.</p>
+<div class="demo-box">Demo accounts: <code>alice/alice123</code> · <code>bob/bob123</code> · <code>admin/admin123</code></div>
