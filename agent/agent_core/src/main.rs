@@ -60,28 +60,8 @@ use container::*;
 Заняться кешированием запросов и памятью
 */
 
-/*
-# Полная сборка
-cargo build --release
-cross build --release --target x86_64-unknown-linux-gnu
 
-# Без Docker и Ratatui
-cargo build --release --no-default-features
-cross build --release --no-default-features --target x86_64-unknown-linux-gnu
-cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features -- -S
 
-# Только Ratatui, без Docker
-cargo build --release --no-default-features --features tui
-cross build --release --no-default-features --features tui --target x86_64-unknown-linux-gnu
-
-*/
-
-//docker compose build
-//docker compose up -d
-//docker attach agent-core
-//Ctrl+P, Ctrl+Q чтобы контейнер не положить для выхода
-//docker compose run --rm agent -L тест на локалке
-//docker compose run --rm agent -O
 #[tokio::main] //Асинк рантайм - база
 async fn main()
 {
@@ -258,14 +238,27 @@ async fn main()
     //Навесить базу
     let agent_builder: AgentBuilder = agent_builder
     .preamble(SYSTEM_PROMPT)
-    .context(TOOLS)
     .context(MAIN_SKILLS)
-    .context(SAST_SKILLS)
-    .context(DAST_SKILLS);
+    .context(MAIN_TOOLS);
 
     //Настройки
     let agent_builder: AgentBuilder = agent_builder
-    .default_max_turns(MAX_LLM_CALLS); 
+    .default_max_turns(MAX_LLM_CALLS);
+
+    #[cfg(feature = "sast")]
+    let agent_builder: AgentBuilder = agent_builder
+    .context(SAST_SKILLS)
+    .context(SAST_TOOLS);
+
+    #[cfg(feature = "dast")]
+    let agent_builder: AgentBuilder = agent_builder
+    .context(DAST_SKILLS)
+    .context(DAST_TOOLS);
+
+    #[cfg(feature = "docker")]
+    let agent_builder: AgentBuilder = agent_builder
+    .context(DOCKER_SKILLS)
+    .context(DOCKER_TOOLS);
 
     //Базовые инструменты
     let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
@@ -277,11 +270,15 @@ async fn main()
     .tool(DirectoryContents);
 
     //SAST + DAST
+    #[cfg(feature = "sast")]
     let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
-    .tool(RunZap)
-    .tool(RunNuclei)
     .tool(RunBandit)
     .tool(RunSemgrep);
+
+    #[cfg(feature = "dast")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
+    .tool(RunZap)
+    .tool(RunNuclei);
 
     //Контейнер
     #[cfg(feature = "docker")]
@@ -299,7 +296,7 @@ async fn main()
     info!("Агент готов: {:?}", time_start.elapsed());
     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
     Out::Text(format!("Агент готов: {:?}", time_start.elapsed())))
-    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
     let auto: bool = match var("AUTO")
@@ -309,7 +306,7 @@ async fn main()
             info!("Параметр запуска обнаружен");
             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
             Out::Text(String::from("Параметр запуска обнаружен")))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Ошибка связи с консолью");
 
             if var == "1"
@@ -317,7 +314,7 @@ async fn main()
                 info!("Переход в автоматический режим...");
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                 Out::Text(String::from("Переход в автоматический режим...")))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
 
                 true
@@ -325,7 +322,7 @@ async fn main()
                 info!("Переход в ручной режим...");
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                 Out::Text(String::from("Переход в ручной режим...")))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
 
                 false
@@ -337,7 +334,7 @@ async fn main()
             info!("Параметр запуска не обнаружен");
             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
             Out::Text(String::from("Параметр запуска не обнаружен")))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Ошибка связи с консолью");
 
             false
@@ -356,14 +353,14 @@ async fn main()
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(prompt.to_string()))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
         let time_prompt: Instant = Instant::now();
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(String::from("Запрос передан в обработку...")))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
 
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
@@ -405,7 +402,7 @@ async fn main()
                 error!("Ошибка ответа!\n{:?}", err);
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                 Out::Text(format!("Ошибка ответа!\n{:?}", err)))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:#?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
             }
         }
