@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= typeof title !== 'undefined' ? title : 'NodeBazaar' %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/">Node<b>Bazaar</b><span class="cart-badge" aria-live="polite" hidden>0</span></a>
+  <form class="searchbox" action="/search" method="get">
+    <div class="searchbox-wrap">
+      <input type="search" name="q" placeholder="Search products…" value="<%= typeof q !== 'undefined' && q ? q : '' %>" aria-label="Search" autocomplete="off">
+    </div>
+  </form>
+  <div class="links">
+    <a href="/">Home</a>
+    <a href="/tools">Tools</a>
+    <a href="/tools/ping">Ping</a>
+    <a href="/contact">Contact</a>
+    <% if (typeof logged !== 'undefined' && logged) { %>
+      <a href="/orders">Orders</a>
+      <a href="/tools">Tools</a>
+      <a href="/account">Account</a>
+      <span class="who"><%= username %></span>
+      <a href="/logout">Log out</a>
+    <% } else { %>
+      <a href="/login">Log in</a>
+      <a href="/register">Register</a>
+    <% } %>
+  </div>
+</nav>
+<main class="container">
+<%- body %>
+</main>
+<footer class="footer">
+  <div class="foot-links">
+    <a href="/home">Shop</a> · <a href="/contact">Contact</a> · <a href="/login">Log in</a>
+  </div>
+  <p>NodeBazaar — intentionally vulnerable Node.js shop. Local use only.</p>
+</footer>
+<button class="to-top" type="button" aria-label="Back to top" title="Back to top">↑</button>
+<script src="/js/app.js" defer></script>
+</body>
+</html>

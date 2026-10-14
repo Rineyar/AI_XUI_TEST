@@ -1,0 +1,92 @@
+<div class="crumbs"><a href="/home">Home</a> › <a href="/categories/<%= product.category %>"><%= product.category %></a> › <%= product.name %></div>
+<div class="detail">
+  <div class="detail-media">
+    <img src="/img/<%= product.image %>" alt="<%= product.name %>">
+  </div>
+  <div class="detail-info">
+    <h1 class="detail-title"><%= product.name %></h1>
+    <div class="detail-meta">
+      <span class="price big"><%= (product.price_cents / 100).toFixed(2) %> €</span>
+      <% if (product.stock > 10) { %>
+        <span class="stock in">In stock — <%= product.stock %> units</span>
+      <% } else { %>
+        <span class="stock low">Only <%= product.stock %> left</span>
+      <% } %>
+    </div>
+    <p class="detail-desc"><%= product.description %></p>
+    <% product.tags.forEach(function (t) { %><span class="tag"><%= t %></span><% }) %>
+
+    <div class="buybox">
+      <h3 class="buybox-title">Order now</h3>
+      <form method="post" action="/checkout">
+        <!-- VULN (A06): product_name and amount_cents are client-controlled. -->
+        <input type="hidden" name="product_id" value="<%= product.id %>">
+        <input type="hidden" name="product_name" value="<%= product.name %>">
+        <input type="hidden" name="amount_cents" value="<%= product.price_cents %>">
+        <div class="bb-row">
+          <label for="qty">Quantity</label>
+          <input id="qty" class="qty" name="quantity" value="1" inputmode="numeric">
+        </div>
+        <div class="bb-row">
+          <label for="addr">Shipping address</label>
+          <input id="addr" name="address" value="" placeholder="Street, number, city" required>
+        </div>
+        <div class="bb-row">
+          <label for="card">Card number</label>
+          <input id="card" name="card_number" value="" placeholder="4242 4242 4242 4242" autocomplete="off" required>
+        </div>
+        <div class="bb-cols">
+          <div class="bb-row">
+            <label for="cvv">CVV</label>
+            <input id="cvv" name="cvv" value="" placeholder="123" autocomplete="off" required>
+          </div>
+          <div class="bb-row">
+            <label>Amount</label>
+            <div class="bb-amount"><%= (product.price_cents / 100).toFixed(2) %> €</div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-buy">Buy with test card</button>
+        <p class="bb-note">Payments are simulated. Use a test card number.</p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="detail-body">
+  <section>
+    <h2>The long version</h2>
+    <p class="prose"><%= product.long_description %></p>
+  </section>
+
+  <section>
+    <h2>Reviews <span class="muted">(<%= reviews.length %>)</span></h2>
+    <% if (reviews.length === 0) { %><p class="muted">No reviews yet — be the first to regret recommending this.</p><% } %>
+    <% reviews.forEach(function (r) { %>
+      <div class="review">
+        <div class="review-head">
+          <span class="who"><%= r.username %></span>
+          <span class="stars"><% for (var i = 0; i < r.rating; i++) { %>★<% } %><% for (var i = r.rating; i < 5; i++) { %>☆<% } %></span>
+        </div>
+        <!-- VULN (A05, stored XSS): body renders unescaped -->
+        <p><%- r.body %></p>
+      </div>
+    <% }) %>
+
+    <% if (typeof logged !== 'undefined' && logged) { %>
+      <form method="post" action="/products/<%= product.id %>/reviews" class="review-form">
+        <h3>Write a review</h3>
+        <select name="rating" aria-label="Rating">
+          <option value="5">5 — life-changing</option>
+          <option value="4">4 — desk-worthy</option>
+          <option value="3">3 — it's fine</option>
+          <option value="2">2 — drawer material</option>
+          <option value="1">1 — returned mentally</option>
+        </select>
+        <textarea name="body" rows="3" placeholder="What do you think?" required></textarea>
+        <button type="submit" class="btn btn-primary">Post review</button>
+      </form>
+    <% } else { %>
+      <p class="muted">Want to review? <a href="/login?returnurl=/products/<%= product.id %>">Log in</a> first — reviews carry your name.</p>
+    <% } %>
+  </section>
+</div>

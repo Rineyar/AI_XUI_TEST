@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nodebazaar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nodebazaar}
+      POSTGRES_DB: nodebazaar
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nodebazaar -d nodebazaar"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  imds:
+    build: ./mocks/imds
+    restart: unless-stopped
+
+  vault:
+    build: ./mocks/vault
+    restart: unless-stopped
+
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:${APP_PORT:-8888}:3000"
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgres://nodebazaar:${POSTGRES_PASSWORD:-nodebazaar}@db:5432/nodebazaar
+      MONGO_URL: mongodb://mongo:27017/nodebazaar
+      IMDS_URL: http://imds:8090
+      VAULT_URL: http://vault:8091
+      SESSION_SECRET: ${SESSION_SECRET:-nodebazaar-dev-secret-do-not-use-in-prod}
+      JWT_SECRET: ${JWT_SECRET:-jwt-super-secret}
+      DEBUG_ERRORS: "1"
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      imds:
+        condition: service_started
+      vault:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  mongodata:

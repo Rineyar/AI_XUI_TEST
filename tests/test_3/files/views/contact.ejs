@@ -1,0 +1,23 @@
+<h1>Contact</h1>
+<% if (typeof sent !== 'undefined' && sent) { %>
+  <div class="ok-box">Message received — ticket #<%= ticket %>. We answer within 2 business decades.</div>
+<% } %>
+<div class="two-col">
+  <div>
+    <form method="post" action="/contact" class="form">
+      <label>Your email</label>
+      <input name="email" type="text" placeholder="you@example.com" required>
+      <label>Message</label>
+      <textarea name="message" rows="6" placeholder="Tell us everything. Newlines welcome." required></textarea>
+      <button type="submit" class="btn btn-primary">Send message</button>
+    </form>
+  </div>
+  <div>
+    <h2>Other ways to reach us</h2>
+    <dl class="dl">
+      <dt>Support</dt><dd>support@nodebazaar.local (read quarterly)</dd>
+      <dt>Office</dt><dd>The standing desk, second floor</dd>
+      <dt>Hours</dt><dd>Whenever the containers are up</dd>
+    </dl>
+  </div>
+</div>

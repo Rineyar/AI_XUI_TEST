@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+<rect width="640" height="360" fill="#c53030"/>
+<circle cx="320" cy="180" r="130" fill="rgba(255,255,255,0.12)"/>
+<text x="320" y="225" font-size="150" text-anchor="middle">🍉</text>
+</svg>

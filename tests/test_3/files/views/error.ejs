@@ -1,0 +1,6 @@
+<h1><%= typeof message !== 'undefined' ? message : 'Something went wrong' %></h1>
+<% if (typeof error !== 'undefined' && error && error.stack) { %>
+  <!-- VULN (A02/A10): stack trace rendered to the user when DEBUG_ERRORS=1. -->
+  <pre class="error-box"><%= error.stack %></pre>
+<% } %>
+<p><a href="/">Back to the shop</a></p>
