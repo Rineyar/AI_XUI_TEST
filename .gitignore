@@ -10,5 +10,4 @@ Cargo.lock
 */workspace
 .idea
 /agent/tools/tools_py/__pycache__
-strategy.md
 /vega
