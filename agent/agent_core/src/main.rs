@@ -50,6 +50,8 @@ use container::*;
 Заняться кешированием запросов и памятью
 */
 
+//cross build --release --target x86_64-unknown-linux-gnu
+
 //docker compose build
 //docker compose up -d
 //docker attach agent-core
