@@ -173,6 +173,24 @@ async fn main()
             model.agent("openrouter/auto")
         }
 
+        "-V" =>
+        {
+            let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
+            .api_key(var("OPENAI_API_KEY").inspect_err(|err|
+            error!("Отсутствует API ключ - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует API ключ")) //Передать ключ
+            .base_url(var("OPENAI_BASE_URL").inspect_err(|err|
+            error!("Отсутствует ссылка - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует ссылка")) //Передать ссылку
+            .build().inspect_err(|err|
+            error!("Сборка VEGA не удалась - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Сборка VEGA не удалась");
+
+            model.agent(var("LOCAL_AGENT_MODEL").inspect_err(|err|
+            error!("Отсутствует ID модели - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .expect("Отсутствует ID модели"))
+        }
+
         _ =>
         {
             error!("Некорректный выбор модели!");
