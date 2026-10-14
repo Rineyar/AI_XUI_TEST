@@ -40,6 +40,8 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
 
             match stdin.read_line(&mut prompt)
             {
+                Ok(0) => { break; }
+
                 Ok(_) =>
                 {
                     if prompt_tx.send(prompt).is_err() 
@@ -50,14 +52,14 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                     }
                 }
 
-                Err(_) => break
+                Err(_) => { break; }
             }
         }
     });
 
     let console_thread_writer: thread::JoinHandle<()> = thread::spawn(move ||
     {
-        while let Ok(out) = rx.try_recv()
+        while let Ok(out) = rx.recv()
         {
             match out
             {
@@ -66,10 +68,7 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                     println!("{}", msg);
                 }
 
-                Out::Shutdown =>
-                {
-                    break;
-                }
+                Out::Shutdown => { break; }
 
                 _ => { }
             }
