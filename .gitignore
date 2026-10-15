@@ -12,3 +12,4 @@ Cargo.lock
 /agent/tools/tools_py/__pycache__
 !tests/test_1/files/.env
 /vega
+strategy.md
