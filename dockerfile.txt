@@ -30,7 +30,7 @@ COPY agent/guardrails /build/agent/guardrails
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-    cargo build --release \
+    cargo build --release --features unsafe_tools \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
 #==========================================#
@@ -67,6 +67,7 @@ ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
 ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
 ENV AUTO=1
+ENV UNSAFE=1
 
 #Создание пользователя и Изолятора
 RUN useradd --create-home --uid 1000 --user-group agent && install -d -o root -g agent -m 1770 /agent/workspace
