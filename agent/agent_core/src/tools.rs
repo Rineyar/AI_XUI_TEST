@@ -25,6 +25,12 @@ use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
 #[cfg(feature = "docker")]
 use crate::container; //Функции для работы с контом
 
+#[cfg(feature = "unsafe_tools")]
+use tools_rs::unsafe_tools;
+
+#[cfg(feature = "unsafe_tools")]
+use crate::guards::unsafe_guard;
+
 //Для PyEnv
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFunction};
@@ -879,4 +885,642 @@ pub async fn run_nuclei(
     return Python::attach(|py: Python<'_>| {
         res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_read_text_file(path: String) -> Result<String, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_text_file", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_text_file", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<String, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_read_text_file(&path)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(text) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(text);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed()); 
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");  
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_read_bin_file(path: String) -> Result<Vec<u8>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_bin_file", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_bin_file", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<Vec<u8>, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_read_bin_file(&path)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(data) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(data);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_write_text_file(path: String, text: String) -> Result<(), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_text_file", path, text, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_text_file", path, text, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_write_text_file(&path, &text)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(()) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(());
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_write_bin_file(path: String, data: Vec<u8>) -> Result<(), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_bin_file", path, data, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_bin_file", path, data, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_write_bin_file(&path, &data)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(()) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(());
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_execute(command: String) -> Result<(String, String, Option<i32>), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_execute", command, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_execute", command, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(String, String, Option<i32>), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_execute(&command)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_http_get(url: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_get", url, headers, timeout, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_get", url, headers, timeout, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(u16, String), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_http_get(&url, headers, timeout)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_http_post(url: String, data: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_post", url, headers, data, timeout, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_post", url, headers, data, timeout, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(u16, String), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_http_post(&url, &data, headers, timeout)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_directory_contents(path: String) -> Result<Vec<String>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_directory_contents", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_directory_contents", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<Vec<String>, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_directory_contents(&path)
+        .inspect_err(|err| error!(" - {:#?}", err))
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+
+#[cfg(feature = "unsafe_tools")]
+pub async fn unsafe_dump_env() -> Result<HashMap<String, String>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван\t|\t{:?}", "unsafe_dump_env", time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван\t|\t{:?}", "unsafe_dump_env", time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<HashMap<String, String>, ToolExecutionError>
+    {
+        let res: HashMap<String, String> = unsafe_tools::unsafe_dump_env();
+
+        info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Ok(res);
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
 }
