@@ -106,6 +106,11 @@ cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-feature
 # Из каталога agent/ (полная сборка)
 cargo run --manifest-path ./agent_core/Cargo.toml --release -- -S
 
+# Из каталога agent/ (полная сборка + unsafe_tools)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --features unsafe_tools -- -S
+
+# Из каталога agent/ (SAST + DAST + TUI + unsafe_tools)
+cargo run --manifest-path ./agent_core/Cargo.toml --release --no-default-features --features "sast dast tui unsafe_tools" -- -S
 
 ================== DOCKER ==================
 
