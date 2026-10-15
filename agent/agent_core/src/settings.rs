@@ -97,6 +97,12 @@ pub fn load_settings(time: &Instant)
             .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
             .expect("Ошибка связи с консолью");
 
+            info!("Переход в ручной режим...");
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(String::from("Переход в ручной режим...")))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
             AUTO.set(false).inspect_err(|err| error!("Неверотяно - {:?}", err)).expect("Неверотяно");
         }
     }
@@ -113,17 +119,17 @@ pub fn load_settings(time: &Instant)
 
             if var == "1"
             {
-                info!("Переход в автоматический режим...");
+                info!("Определена свободная среда...");
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(String::from("Переход в автоматический режим...")))
+                Out::Text(String::from("Определена свободная среда...")))
                 .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
                 .expect("Ошибка связи с консолью");
 
                 UNSAFE.set(true).inspect_err(|err| error!("Неверотяно - {:?}", err)).expect("Неверотяно");
             } else {
-                info!("Переход в ручной режим...");
+                info!("Определена безопасная среда...");
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(String::from("Переход в ручной режим...")))
+                Out::Text(String::from("Определена безопасная среда...")))
                 .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
                 .expect("Ошибка связи с консолью");
 
@@ -136,6 +142,12 @@ pub fn load_settings(time: &Instant)
             info!("Параметр запуска не обнаружен");
             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
             Out::Text(String::from("Параметр запуска не обнаружен")))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            info!("Определена безопасная среда...");
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(String::from("Определена безопасная среда...")))
             .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
             .expect("Ошибка связи с консолью");
 
