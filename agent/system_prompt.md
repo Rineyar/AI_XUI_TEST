@@ -19,6 +19,14 @@ Base your actions and conclusions on the user's task, available capabilities, an
 
 Refer to `*_tools.md` for tool interfaces and available operations.
 
+## Unsafe Tools
+
+When available, `unsafe_*` tools provide direct access to the agent's filesystem, shell, network, and environment without normal workspace guard restrictions.
+
+Prefer guarded tools for ordinary operations. Use unsafe tools when direct access is necessary for the task.
+
+These tools execute with the agent process permissions and must not be treated as isolated sandbox operations. Handle their outputs carefully, especially command results and environment variables. Never expose sensitive credentials in user-facing responses.
+
 # Workspace and Environment
 
 - Agent-local file operations are restricted to the configured agent workspace.
