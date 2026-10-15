@@ -65,7 +65,7 @@ pub fn unsafe_http_post(url: &str, data: &str, headers: Option<HashMap<String, S
 {
     let client: Client = Client::builder().timeout(Duration::from_secs(timeout.unwrap_or(15u64))).build()?;
 
-    let mut request: RequestBuilder = client.get(url);
+    let mut request: RequestBuilder = client.post(url);
 
     if let Some(headers) = headers
     {
