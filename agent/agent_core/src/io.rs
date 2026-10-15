@@ -24,12 +24,14 @@ use tracing::{error, info, warn}; //Макросы логирования
 
 pub static CONSOLE_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отправщик для консоли
 
+#[derive(Debug)]
 enum ConsoleOut
 {
     Text(String),
     Compressed(CompressedOut),
 }
 
+#[derive(Debug)]
 struct CompressedOut
 {
     id: usize,
@@ -175,6 +177,9 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                     Out::Shutdown =>
                     {
                         running = false;
+
+                        info!("\nЛог последнего вывода:\n{:#?}\n", state);
+
                         break;
                     }
 
@@ -301,6 +306,8 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
 
                     Out::Clear =>
                     {
+                        info!("\nЛог последнего вывода:\n{:#?}\n", state);
+                        
                         state.clear();
                         compressed_index.clear();
                         current_compressed = None;
