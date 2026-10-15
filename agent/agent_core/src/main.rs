@@ -361,49 +361,9 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    let auto: bool = match var("AUTO")
-    {
-        Ok(var) =>
-        {
-            info!("Параметр запуска обнаружен");
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::Text(String::from("Параметр запуска обнаружен")))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Ошибка связи с консолью");
+    load_settings(&time_start); //Загрузить настройки
 
-            if var == "1"
-            {
-                info!("Переход в автоматический режим...");
-                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(String::from("Переход в автоматический режим...")))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-                .expect("Ошибка связи с консолью");
-
-                true
-            } else {
-                info!("Переход в ручной режим...");
-                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(String::from("Переход в ручной режим...")))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-                .expect("Ошибка связи с консолью");
-
-                false
-            }
-        }
-
-        Err(_) =>
-        {
-            info!("Параметр запуска не обнаружен");
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::Text(String::from("Параметр запуска не обнаружен")))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Ошибка связи с консолью");
-
-            false
-        }
-    };
-
-    if auto
+    if *AUTO.get().ok_or("Невероятно").inspect_err(|err| error!("{:?}", err)).expect("Невероятно")
     {
         let task: String = read_to_string("strategy.md")
         .inspect_err(|err| error!("Ошибка чтения задания в AUTO режиме - {:?}", err))
