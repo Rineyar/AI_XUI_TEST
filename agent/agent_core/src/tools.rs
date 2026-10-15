@@ -888,6 +888,13 @@ pub async fn run_nuclei(
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_read_text_file",
+    description = "Read a UTF-8 text file directly from the agent filesystem.",
+    params(
+        path = "Absolute or relative path to the file."
+    )
+)]
 pub async fn unsafe_read_text_file(path: String) -> Result<String, ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -963,6 +970,13 @@ pub async fn unsafe_read_text_file(path: String) -> Result<String, ToolExecution
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_read_bin_file",
+    description = "Read a file as raw binary data from the agent filesystem.",
+    params(
+        path = "Absolute or relative path to the file."
+    )
+)]
 pub async fn unsafe_read_bin_file(path: String) -> Result<Vec<u8>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1038,6 +1052,14 @@ pub async fn unsafe_read_bin_file(path: String) -> Result<Vec<u8>, ToolExecution
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_write_text_file",
+    description = "Create or overwrite a text file directly in the agent filesystem.",
+    params(
+        path = "Absolute or relative destination file path.",
+        text = "Text content to write into the file."
+    )
+)]
 pub async fn unsafe_write_text_file(path: String, text: String) -> Result<(), ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1113,6 +1135,14 @@ pub async fn unsafe_write_text_file(path: String, text: String) -> Result<(), To
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_write_bin_file",
+    description = "Create or overwrite a binary file directly in the agent filesystem.",
+    params(
+        path = "Absolute or relative destination file path.",
+        data = "Binary content represented as an array of bytes."
+    )
+)]
 pub async fn unsafe_write_bin_file(path: String, data: Vec<u8>) -> Result<(), ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1185,6 +1215,13 @@ pub async fn unsafe_write_bin_file(path: String, data: Vec<u8>) -> Result<(), To
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_execute",
+    description = "Execute a shell command directly in the agent runtime and return stdout, stderr, and exit code.",
+    params(
+        command = "Shell command to execute using sh -c."
+    )
+)]
 pub async fn unsafe_execute(command: String) -> Result<(String, String, Option<i32>), ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1257,6 +1294,15 @@ pub async fn unsafe_execute(command: String) -> Result<(String, String, Option<i
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_http_get",
+    description = "Perform an HTTP or HTTPS GET request from the agent runtime.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        headers = "Optional dictionary of HTTP request headers.",
+        timeout = "Optional request timeout in seconds. Default: 15."
+    )
+)]
 pub async fn unsafe_http_get(url: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1329,6 +1375,16 @@ pub async fn unsafe_http_get(url: String, headers: Option<HashMap<String, String
 }
 
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_http_post",
+    description = "Perform an HTTP or HTTPS POST request with a text body from the agent runtime.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        data = "Request body sent as text without automatic JSON serialization.",
+        headers = "Optional dictionary of HTTP request headers.",
+        timeout = "Optional request timeout in seconds. Default: 15."
+    )
+)]
 pub async fn unsafe_http_post(url: String, data: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1400,8 +1456,14 @@ pub async fn unsafe_http_post(url: String, data: String, headers: Option<HashMap
     .expect("Ошибка присоединения потока исполения");
 }
 
-
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_directory_contents",
+    description = "List files and directories directly in the agent filesystem without recursive traversal.",
+    params(
+        path = "Absolute or relative directory path."
+    )
+)]
 pub async fn unsafe_directory_contents(path: String) -> Result<Vec<String>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
@@ -1473,8 +1535,11 @@ pub async fn unsafe_directory_contents(path: String) -> Result<Vec<String>, Tool
     .expect("Ошибка присоединения потока исполения");
 }
 
-
 #[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_dump_env",
+    description = "Return agent process environment variables, excluding explicitly blacklisted keys."
+)]
 pub async fn unsafe_dump_env() -> Result<HashMap<String, String>, ToolExecutionError>
 {
     let time: Instant = Instant::now();
