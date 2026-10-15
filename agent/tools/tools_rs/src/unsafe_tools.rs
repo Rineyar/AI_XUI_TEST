@@ -101,7 +101,7 @@ pub fn unsafe_directory_contents(path: &str) -> Result<Vec<String>, std::io::Err
 
 pub fn unsafe_dump_env() -> HashMap<String, String>
 {
-    let mut result: HashMap<String, String> = HashMap::from_iter(vars().into_iter());
+    let mut result: HashMap<String, String> = HashMap::from_iter(vars());
 
     result.remove("MAIN_MODEL_API_KEY");
 
