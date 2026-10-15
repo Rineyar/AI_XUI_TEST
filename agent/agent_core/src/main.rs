@@ -322,6 +322,10 @@ async fn main()
     .context(DOCKER_SKILLS)
     .context(DOCKER_TOOLS);
 
+    #[cfg(feature = "unsafe_tools")]
+    let agent_builder: AgentBuilder = agent_builder
+    .context(UNSAFE_TOOLS);
+
     //Базовые инструменты
     let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
     .tool(ReadFile)
@@ -353,6 +357,18 @@ async fn main()
     .tool(DownloadPath)
     .tool(ReadContainerFile);
 
+    #[cfg(feature = "unsafe_tools")]
+    let agent_builder: AgentBuilder<WithBuilderTools> = agent_builder
+    .tool(UnsafeReadTextFile)
+    .tool(UnsafeReadBinFile)
+    .tool(UnsafeWriteTextFile)
+    .tool(UnsafeWriteBinFile)
+    .tool(UnsafeExecute)
+    .tool(UnsafeHttpGet)
+    .tool(UnsafeHttpPost)
+    .tool(UnsafeDirectoryContents)
+    .tool(UnsafeDumpEnv);
+
     let agent: Agent = agent_builder.build(); //Builder -> Agent построить короче
 
     info!("Агент готов: {:?}", time_start.elapsed());
@@ -362,6 +378,12 @@ async fn main()
     .expect("Ошибка связи с консолью");
 
     load_settings(&time_start); //Загрузить настройки
+
+    info!("Настройки загружены: {:?}", time_start.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Настройки загружены: {:?}", time_start.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
+    .expect("Ошибка связи с консолью");
 
     if *AUTO.get().ok_or("Невероятно").inspect_err(|err| error!("{:?}", err)).expect("Невероятно")
     {
