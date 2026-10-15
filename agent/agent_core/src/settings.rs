@@ -27,15 +27,23 @@ pub static FULL_PROMPT: &str = concat!(
 
 //Скиллы
 pub static MAIN_SKILLS: &str = include_str!("../../skills/main_skills.md");
+#[cfg(feature = "sast")]
 pub static SAST_SKILLS: &str = include_str!("../../skills/sast_skills.md");
+#[cfg(feature = "dast")]
 pub static DAST_SKILLS: &str = include_str!("../../skills/dast_skills.md");
+#[cfg(feature = "docker")]
 pub static DOCKER_SKILLS: &str = include_str!("../../skills/docker_skills.md");
 
 //Инструменты
 pub static MAIN_TOOLS: &str = include_str!("../../tools/main_tools.md");
+#[cfg(feature = "sast")]
 pub static SAST_TOOLS: &str = include_str!("../../tools/sast_tools.md");
+#[cfg(feature = "dast")]
 pub static DAST_TOOLS: &str = include_str!("../../tools/dast_tools.md");
+#[cfg(feature = "docker")]
 pub static DOCKER_TOOLS: &str = include_str!("../../tools/docker_tools.md");
+#[cfg(feature = "unsafe_tools")]
+pub static UNSAFE_TOOLS: &str = include_str!("../../tools/unsafe_tools.md");
 
 //Максимум вывовов модели
 pub const MAX_LLM_CALLS: usize = 200;
