@@ -9,12 +9,17 @@ import uuid
 
 __all__ = ["run_nuclei","run_zap"]
 
-'''
-target_url - url адрес цели. Допускается только http протокол
-template - Путь к шаблону из папки agent. Шаблон должен быть в формате .yaml. По умолчанию использует свои шаблоны. 
-severity - Важность искомых угроз. По умолчанию ищет все.
-'''
-def run_nuclei(*, target_url: str, template: str = None, severity: str = "info,low,medium,high,critical", timeout: int = 120):
+__tool_meta__ = {
+    "run_zap": {
+        "description": "run_zap tool. Запускает OWASP ZAP в Docker, "
+                       "сканирует указанный URL и возвращает JSON-отчёт."
+    },
+    "run_nuclei": {
+            "description": "Runs Nuclei — a DAST tool for checking an HTTP target against templates."  
+    }
+}
+
+def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,medium,high,critical", timeout: int = 120):
     output = {
             "success" : False,
             "output" : "",
@@ -64,43 +69,28 @@ def run_nuclei(*, target_url: str, template: str = None, severity: str = "info,l
         output["error"] = f"Exception: {e}"
     
     return json.dumps(output, indent=4, ensure_ascii=False)
-    
 
-
-
-__tool_meta__ = {
-    "run_zap": {
-        "description": "run_zap tool. Запускает OWASP ZAP в Docker, "
-                       "сканирует указанный URL и возвращает JSON-отчёт."
-    }
-}
-
-
-image = "zaproxy/zap-stable"
-port = 8090
-api_key = "zapkey123"
-
+IMAGE = "zaproxy/zap-stable"
+PORT = 8090
+KEY = "zapkey123"
+PLANS_DIR = "zap_plans"
+cont_name = "zap-daemon"
 ZAP_BASE_URL = os.environ.get(
     "ZAP_BASE_URL",
     "http://sandbox:8090"
 ).rstrip("/")
 
-def _zap_api(path: str, params: dict = None, timeout: int = 30) -> dict:
-    query = dict(params or {})
-    query["apikey"] = api_key
+def _zap_api(path, params=None, timeout=30):
+    if params is None:
+        params = {}
+    params["apikey"] = KEY
     url = f"{ZAP_BASE_URL}{path}"
-    r = requests.get(url, params=query, timeout=timeout)
-
     try:
+        r = requests.get(url, params=params, timeout=(5, timeout))
         r.raise_for_status()
-    except requests.HTTPError as e:
-        raise requests.HTTPError(
-            f"ZAP API HTTP {r.status_code}: {r.text[:1500]}",
-            response=r
-        ) from e
-
-    return r.json()
-
+        return r.json()
+    except requests.exceptions.ReadTimeout:
+        raise Exception(f"Read timeout on {path}") from None
 
 def _wait_for_zap(container_name: str, timeout: int = 90) -> None:
     start = time.monotonic()
@@ -137,91 +127,77 @@ def _wait_for_zap(container_name: str, timeout: int = 90) -> None:
                 f"{(logs.stdout + logs.stderr)[-3000:]}"
             )
         try:
-            _zap_api("/JSON/core/view/version/", timeout=3)
+            _zap_api("/JSON/core/view/version/")
             return
-        except requests.HTTPError as e:
-            code = (
-                e.response.status_code
-                if e.response is not None
-                else None
-            )
-
-            if code in (400, 401, 403, 404):
-                raise RuntimeError(
-                    f"ZAP API отклонил запрос: HTTP {code}"
-                ) from e
-
-            last_error = str(e)
-
-        except requests.RequestException as e:
-            last_error = str(e)
-
+        except Exception:
+            pass
         time.sleep(2)
 
     raise TimeoutError(
-        f"ZAP API не стал доступен за {timeout} секунд. "
-        f"Последняя ошибка: {last_error}"
+        f"ZAP API не стал доступен за {timeout} секунд."
     )
 
-
-def _wait_for_scan(scan_type: str, scan_id: str, timeout: int = 600) -> None:
-    start = time.time()
-    while time.time() - start < timeout:
-        status = _zap_api(f"/JSON/{scan_type}/view/status/",
-                          {"scanId": scan_id})
-        if int(status.get("status", 0)) >= 100:
-            return
-        time.sleep(3)
-    raise Exception(f"{scan_type} не завершился за {timeout} секунд")
-
-
-def run_zap(*, url: str,
-            spider_timeout: int = 600,
-            ascan_timeout: int = 1800,
-            do_ascan: bool = False) -> str:
-
+def run_zap(*, target_url: str, plan_template: str = "plan.yaml.tpl", timeout: int = 1800) -> str:
     output = {"success": False, "output": "", "error": ""}
-
-    cont_name = f"zap-daemon-{uuid.uuid4().hex[:12]}"
-
-    container_started = False
+    plan_host_path = None
 
     try:
+        os.makedirs(PLANS_DIR, exist_ok=True)
+        subprocess.run(["docker", "rm", "-f", cont_name], capture_output=True, text=True)
+
         cmd = [
             "docker", "run", "-d",
             "--name", cont_name,
-            "-p", f"{port}:{port}",
-            "-e", f"ZAP_PORT={port}",
-            image,
+            "--add-host=host.docker.internal:host-gateway",   # ← для Linux
+            "-p", f"{PORT}:{PORT}",
+            "-v", f"{os.path.abspath(PLANS_DIR)}:/zap/wrk:rw",
+            IMAGE,
             "zap.sh", "-daemon",
             "-host", "0.0.0.0",
-            "-port", str(port),
-            "-config", f"api.key={api_key}",
+            "-port", str(PORT),
+            "-config", f"api.key={KEY}",
             "-config", "api.addrs.addr.name=.*",
             "-config", "api.addrs.addr.regex=true",
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
+        _wait_for_zap("zap-daemon")
 
-        container_started = True
+        prob = _zap_api("/JSON/core/action/accessUrl/", {"url": target_url, "followRedirects": "true"})
+        if not prob.get("accessUrl"):
+            raise Exception(f"Цель недоступна из ZAP: {target_url}")
 
-        _wait_for_zap(cont_name)
+        with open(plan_template) as f:
+            plan_content = f.read().replace("{{TARGET}}", target_url)
 
-        spider_resp = _zap_api("/JSON/spider/action/scan/", {"url": url})
-        spider_id = spider_resp["scan"]
-        _wait_for_scan("spider", spider_id, timeout=spider_timeout)
+        plan_filename = f"plan_{int(time.time())}.yaml"
+        plan_host_path = os.path.join(PLANS_DIR, plan_filename)
+        with open(plan_host_path, "w") as f:
+            f.write(plan_content)
 
-        ascan_id = None
-        if do_ascan:
-            ascan_resp = _zap_api("/JSON/ascan/action/scan/", {"url": url})
-            ascan_id = ascan_resp["scan"]
-            _wait_for_scan("ascan", ascan_id, timeout=ascan_timeout)
+        # runPlan — просто через _zap_api
+        run_resp = _zap_api("/JSON/automation/action/runPlan/",
+                            {"filePath": f"/zap/wrk/{plan_filename}"})
+        plan_id = run_resp.get("planId")
+        if not plan_id:
+            raise Exception(f"API не вернул planId: {run_resp}")
+        if plan_id in ("", "0"):
+            raise Exception(f"planId не валидный: {run_resp}")
 
-        alerts_resp = _zap_api("/JSON/core/view/alerts/", {"baseurl": url})
-        alerts = alerts_resp.get("alerts", [])
+        # ожидание — тоже через _zap_api
+        start = time.time()
+        while time.time() - start < timeout:
+            p = _zap_api("/JSON/automation/view/planProgress/", {"planId": plan_id})
+            if p.get("finished"):
+                break
+            time.sleep(3)
+        else:
+            raise Exception(f"План не завершился за {timeout} секунд")
+
+        alerts =_zap_api("/JSON/core/view/alerts/").get("alerts", [])
 
         output["output"] = {
-            "target": url,
-            "ascan_done": do_ascan,
+            "target": target_url,
+            "plan_id": plan_id,
             "alerts_count": len(alerts),
             "alerts": alerts,
         }
@@ -234,24 +210,16 @@ def run_zap(*, url: str,
     except Exception as e:
         output["error"] = f"Exception: {e}"
     finally:
-        if container_started:
-            try:
-                subprocess.run(
-                    ["docker", "rm", "-f", cont_name],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-            except Exception as e:
-                output["success"] = False
-                output["error"] += f" Cleanup error: {e}"
-
+        if plan_host_path and os.path.exists(plan_host_path):
+            os.remove(plan_host_path)
+        try:
+            subprocess.run(["docker", "rm", "-f", cont_name], capture_output=True, text=True)
+        except Exception as e:
+            output["success"] = False
+            output["error"] += f" Cleanup error: {e}"
     return json.dumps(output, indent=4, ensure_ascii=False)
 
 
 if __name__ == "__main__":
-    result = run_zap(url="http://host.docker.internal:3000", do_ascan=False)
+    result = run_zap(target_url="http://host.docker.internal:3000", plan_template="plan.yaml.tpl")
     print(result)
-    TARGET_URL = "http://127.0.0.1:8080"
-    print(run_nuclei(target_url=TARGET_URL))
