@@ -609,7 +609,7 @@ pub async fn download_path(id: String, remote_path: String, local_path: String) 
             return Err(ToolExecutionError::invalid_args("Invalid local path. Only paths relative to the agent workspace are allowed."));
         }
 
-        let destination: PathBuf = Path::new("/agent/workspace").join(&local);
+        let destination: PathBuf = Path::new("/agent/workspace").join(local);
 
         let files: Vec<u8> = container::load_data(&id, &remote_path).await
         .map_err(|err| ToolExecutionError::other(format!("Failed to download files: {:?}", err)))?;
