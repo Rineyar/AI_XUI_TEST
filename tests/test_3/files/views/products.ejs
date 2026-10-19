@@ -1,0 +1,31 @@
+<h1><%= typeof heading !== 'undefined' && heading ? heading.charAt(0).toUpperCase() + heading.slice(1) : 'Catalog' %></h1>
+<% if (typeof error !== 'undefined' && error) { %>
+  <div class="error-box">
+    <strong>Query error</strong>
+    <% if (typeof sqlError !== 'undefined' && sqlError) { %>
+      <pre><%= sqlError.message %>
+<%= sqlError.query || '' %></pre>
+    <% } else { %>
+      <p><%= error %></p>
+    <% } %>
+  </div>
+<% } %>
+<% if (typeof q === 'string' && q !== '') { %>
+  <p class="muted">Results for “<span class="q-echo"><%- q %></span>” — <%= products.length %> item(s).</p>
+<% } %>
+<div class="grid">
+  <% products.forEach(function (p) { %>
+    <a class="card" href="/products/<%= p.id %>">
+      <img src="/img/<%= p.image %>" alt="<%= p.name %>" loading="lazy">
+      <div class="card-body">
+        <h3><%= p.name %></h3>
+        <p class="muted"><%= p.description.length > 90 ? p.description.slice(0, 87) + '…' : p.description %></p>
+        <div class="row">
+          <span class="price"><%= (p.price_cents / 100).toFixed(2) %> €</span>
+          <% p.tags.slice(0, 3).forEach(function (t) { %><span class="tag"><%= t %></span><% }) %>
+        </div>
+      </div>
+    </a>
+  <% }) %>
+</div>
+<% if (products.length === 0) { %><p class="muted">Nothing found.</p><% } %>

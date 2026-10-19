@@ -1,0 +1,16 @@
+<h1>Orders</h1>
+<p class="muted">Sorted by <%= sort %>.</p>
+<table class="table">
+  <tr><th>#</th><th>Product</th><th>Qty</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+  <% orders.forEach(function (o) { %>
+    <tr>
+      <td><a href="/orders/<%= o.id %>">#<%= o.id %></a></td>
+      <td><%= o.product_name %></td>
+      <td><%= o.quantity %></td>
+      <td><%= (o.amount_cents / 100).toFixed(2) %> €</td>
+      <td><%= o.status %></td>
+      <td><%= o.created_at.toISOString().slice(0, 16).replace('T', ' ') %></td>
+    </tr>
+  <% }) %>
+</table>
+<% if (orders.length === 0) { %><p class="muted">No orders yet.</p><% } %>

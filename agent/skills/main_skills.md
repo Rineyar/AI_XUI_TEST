@@ -93,7 +93,7 @@ When explicitly requested to perform self-analysis:
 5. Verify that each tool performs its intended operation, rather than relying solely on reported success.
 6. If a tool fails or behaves incorrectly, examine its relevant source code and configuration to identify the probable cause.
 7. Distinguish between implementation defects, environment limitations, guard denials, missing dependencies, and external service failures.
-8. Record the test results and diagnostic findings in `selfanalysys.md` within the writable workspace.
+8. Record the test results and diagnostic findings in `results/selfanalysys.md` within the writable workspace.
 
 ### Testing Rules
 
@@ -122,7 +122,7 @@ A successful function call alone is insufficient for PASS if the expected operat
 
 ### Reporting
 
-Write the results to `selfanalysys.md`.
+Write the results to `results/selfanalysys.md`.
 
 The report should include:
 
@@ -138,70 +138,3 @@ The report should include:
 Do not report suspected causes as confirmed defects without sufficient evidence.
 
 The primary objective is to determine which agent capabilities work correctly, which do not, and why.
-
-## Docker Sandbox
-
-Docker sandbox containers provide isolated environments for executing commands, testing code, and working with files.
-
-Each container has its own `/workspace` directory, separate from the agent workspace.
-
-### Available Operations
-
-- `create_container` — create an isolated container.
-- `execute_command` — execute shell commands inside a running container.
-- `send_path` — transfer existing workspace files or directories into a container.
-- `send_text` — create text files inside a container.
-- `read_container_file` — inspect text files inside a container.
-- `download_path` — retrieve files and directories from a container.
-- `remove_container` — stop and remove a container.
-
-### Container Workflow
-
-1. Create a container using `create_container`.
-2. Save the returned container ID.
-3. Prepare the required directories and files.
-4. Transfer or create files inside the container.
-5. Execute commands and inspect their output and exit codes.
-6. If an operation fails, inspect the error and attempt an appropriate correction.
-7. Download any results that must be preserved.
-8. Remove the container after completing the task.
-
-### Container Rules
-
-- Always use the correct container ID.
-- Container paths are relative to `/workspace` unless otherwise specified.
-- Destination directories must exist before uploading files.
-- Use `mkdir -p` through `execute_command` when necessary.
-- A nonzero exit code indicates an unsuccessful command execution.
-- Do not assume additional software is installed in the container.
-- Download important results before removing the container.
-- Removing a container permanently deletes its writable filesystem.
-- Do not use sandbox containers for tasks that can be completed using simpler workspace tools.
-- Do not confuse Docker sandbox containers with temporary containers managed internally by specialized tools such as `run_zap`.
-
-## Failure Handling
-
-When an operation fails:
-
-1. Inspect the error and available execution details.
-2. Determine whether the failure is caused by invalid arguments, unavailable resources, guard restrictions, missing dependencies, or tool implementation.
-3. Correct the relevant condition when possible.
-4. Retry only when there is a reasonable basis to expect a different result.
-5. If the operation remains unavailable, report the limitation.
-
-Do not conceal tool failures or fabricate missing results.
-
-## Reporting
-
-When reporting analysis results:
-
-- Describe the target and scope of the analysis.
-- State which tools and methods were used.
-- Describe relevant observations and supporting evidence.
-- Clearly separate confirmed findings from suspected issues and uncertainties.
-- Explain the potential security impact when applicable.
-- Provide remediation guidance when appropriate.
-- Mention failed, skipped, or incomplete checks.
-- Do not claim comprehensive security coverage unless the performed assessment supports it.
-
-Reports should be based on actual observations and completed analysis rather than expected tool behavior.

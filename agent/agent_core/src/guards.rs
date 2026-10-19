@@ -8,6 +8,9 @@ use tracing::{error}; //Макросы логов
 use crate::py_env::{get_py_guards, PyFileModule}; //Взять гварды и тип к ним
 use crate::tools::ToolRequest; //Тип для запроса
 
+#[cfg(feature = "unsafe_tools")]
+use crate::settings::UNSAFE;
+
 //Для PyEnv
 use pyo3::prelude::*;
 use pyo3::types::{PyFunction};
@@ -38,6 +41,18 @@ fn core_guard(request: &ToolRequest) -> bool
     }
 
     return true;
+}
+
+#[cfg(feature = "unsafe_tools")]
+pub fn unsafe_guard() -> GuardResponse
+{
+    if *UNSAFE.get().ok_or("Невероятно").inspect_err(|err| error!("{:?}", err)).expect("Невероятно")
+    {
+        return GuardResponse { allowed: true, reason: String::from("Unsave enviroment confirmed.") };
+    } else {
+        return GuardResponse { allowed: false, reason: String::from("Unsave enviroment does not confirmed.") };
+    }
+    
 }
 
 //Гвард проверяющий инструменты

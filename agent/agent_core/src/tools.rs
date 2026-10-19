@@ -6,10 +6,14 @@ use serde_json::{Value, json, Map}; //Json собранный
 use serde_pyobject::to_pyobject; //Для когвертации в pydict
 
 use std::time::Instant; //Для таймера
-use std::collections::HashMap; //Они кста тут живут  
-use std::path::{Path, PathBuf}; //Для путей к конту и вне
+use std::collections::HashMap; //Они кста тут живут
+
+#[cfg(feature = "docker")]
+use std::path::{Path, PathBuf, Component, Components}; //Для путей к конту и вне
+#[cfg(feature = "docker")]
 use std::ffi::OsStr; //Путь для имени архива
 
+#[cfg(feature = "docker")]
 use tar::{Builder, Header, Archive, Entries, Entry}; //Упаковка файлов для конта
 
 use tracing::{error, info, warn}; //Логи
@@ -17,7 +21,15 @@ use tracing::{error, info, warn}; //Логи
 use crate::py_env::{get_py_env, PyFileModule}; //Py воскресенье для тузлов
 use crate::guards::{GuardResponse, tools_guard}; //Гварды
 use crate::{CONSOLE_OUT_TX, Out}; //Связь с консолью
+
+#[cfg(feature = "docker")]
 use crate::container; //Функции для работы с контом
+
+#[cfg(feature = "unsafe_tools")]
+use tools_rs::unsafe_tools;
+
+#[cfg(feature = "unsafe_tools")]
+use crate::guards::unsafe_guard;
 
 //Для PyEnv
 use pyo3::prelude::*;
@@ -153,7 +165,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                     .expect("Ошибка связи с консолью");
                 }
                 
-                Err(_) => 
+                Err(_) => /*TODO т.к. в логи кидается весь ret ошибки */
                 {
                     error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); 
                     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
@@ -174,16 +186,63 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
     .expect("Ошибка присоединения потока исполения");
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "create_container",
     description = "Create and start a new Docker sandbox container. Returns the container ID."
 )]
 pub async fn create_container() -> Result<String, ToolExecutionError>
 {
-    return container::create_container().await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to create container: {:?}", err)));
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван\t|\t{:?}", "create_container", time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван\t|\t{:?}", "create_container", time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    match container::create_container().await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to create container: {:?}", err)))
+    {
+        Ok(id) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(id);
+        }
+        
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed()); 
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
+    }
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "remove_container",
     description = "Remove a Docker sandbox container by its ID.",
@@ -193,10 +252,56 @@ pub async fn create_container() -> Result<String, ToolExecutionError>
 )]
 pub async fn remove_container(id: String) -> Result<(), ToolExecutionError>
 {
-    return container::remove_container(&id).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to remove container: {:?}", err)));
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "remove_container", id, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "remove_container", id, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    match container::remove_container(&id).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to remove container: {:?}", err)))
+    {
+        Ok(()) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(());
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed()); 
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
+    }
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "execute_command",
     description = "Execute a shell command inside a running Docker sandbox container. Returns command output and exit code.",
@@ -207,12 +312,54 @@ pub async fn remove_container(id: String) -> Result<(), ToolExecutionError>
 )]
 pub async fn execute_command(id: String, command: String) -> Result<String, ToolExecutionError>
 {
-    let (output, exit_code) = container::execute_command(&id, &command).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to execute command: {:?}", err)))?;
+    let time: Instant = Instant::now();
 
-    return Ok(format!("Exit code: {:?}\nOutput:\n{:?}", exit_code, output));
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "execute_command", id, command, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "execute_command", id, command, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    match container::execute_command(&id, &command).await
+    .map_err(|err| ToolExecutionError::other(format!("Failed to execute command: {:?}", err)))
+    {
+        Ok((output, exit_code)) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(format!("Exit code: {:?}\nOutput:\n{:?}", exit_code, output));
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
+    }
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_path",
     description = "Upload a file or directory from the agent workspace into a Docker sandbox container. Files and directories are packaged automatically.",
@@ -224,28 +371,111 @@ pub async fn execute_command(id: String, command: String) -> Result<String, Tool
 )]
 pub async fn send_path(id: String, local_path: String, remote_path: String) -> Result<(), ToolExecutionError>
 {
-    let source: PathBuf = Path::new("/agent/workspace").join(&local_path);
+    let time: Instant = Instant::now();
 
-    let filename: &OsStr = source.file_name().ok_or_else(|| ToolExecutionError::invalid_args("Invalid source path."))?/*.to_string_lossy().into_owned()*/;
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
-    archive.follow_symlinks(false);
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "send_path", local_path, remote_path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "send_path", local_path, remote_path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    if source.is_dir()
+    let result: Result<(), ToolExecutionError> = async
     {
-        archive.append_dir_all(filename, &source).map_err(|err| ToolExecutionError::other(format!("Failed to archive directory: {:?}", err)))?;
-    } else {
-        archive.append_path_with_name(&source, filename).map_err(|err| ToolExecutionError::other(format!("Failed to archive file: {:?}", err)))?;
+        let source: PathBuf = async
+        {
+            let workspace: PathBuf = Path::new("/agent/workspace")
+            .canonicalize()
+            .map_err(ToolExecutionError::from_error)?;
+
+            let relative: &Path = Path::new(&local_path);
+
+            if relative.is_absolute()
+            {
+                return Err(ToolExecutionError::invalid_args("Absolute paths are not allowed."));
+            }
+
+            let resolved: PathBuf = workspace
+            .join(relative)
+            .canonicalize()
+            .map_err(ToolExecutionError::from_error)?;
+
+            if !resolved.starts_with(&workspace)
+            {
+                return Err(ToolExecutionError::permission_denied("Path escapes the workspace."));
+            }
+
+            return Ok(resolved);
+        }.await?;
+
+        let filename: &OsStr = source.file_name().ok_or(ToolExecutionError::invalid_args("Invalid source path."))?;
+
+        let remote: &Path = Path::new(&remote_path);
+
+        if remote.is_absolute() || remote.components().any(|component: Component<'_>| !matches!(component, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(ToolExecutionError::invalid_args("Invalid remote path. Only paths relative to /workspace are allowed."));
+        }
+
+        let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
+        archive.follow_symlinks(false);
+
+        if source.is_dir()
+        {
+            archive.append_dir_all(filename, &source)
+            .map_err(|err| ToolExecutionError::other(format!("Failed to archive directory: {:?}", err)))?;
+        } else {
+            archive.append_path_with_name(&source, filename)
+            .map_err(|err| ToolExecutionError::other(format!("Failed to archive file: {:?}", err)))?;
+        }
+
+        let files: Vec<u8> = archive.into_inner()
+        .map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
+
+        container::send_data(&id, &remote_path, files).await
+        .map_err(|err| ToolExecutionError::other(format!("Failed to upload files: {:?}", err)))?;
+
+        Ok(())
+    }.await;
+
+    match result
+    {
+        Ok(()) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(());
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
     }
-
-    let files: Vec<u8> = archive.into_inner().map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
-
-    container::send_data(&id, &remote_path, files).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to upload files: {:?}", err)))?;
-
-    return Ok(());
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "send_text",
     description = "Create or overwrite a UTF-8 text file directly inside a Docker sandbox container.",
@@ -258,24 +488,88 @@ pub async fn send_path(id: String, local_path: String, remote_path: String) -> R
 )]
 pub async fn send_text(id: String, path: String, filename: String, content: String) -> Result<(), ToolExecutionError>
 {
-    let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
-    let mut header: Header = Header::new_gnu();
+    let time: Instant = Instant::now();
 
-    header.set_size(content.len() as u64);
-    header.set_mode(0o644);
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    archive.append_data(&mut header, &filename, content.as_bytes())
-    .map_err(|err| ToolExecutionError::other(format!("Failed to archive text file: {:?}", err)))?;
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "send_text", filename, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "send_text", filename, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    let files: Vec<u8> = archive.into_inner()
-    .map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
+    let result: Result<(), ToolExecutionError> = async
+    {
+        let remote: &Path = Path::new(&path);
 
-    container::send_data(&id, &path, files).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to upload text file: {:?}", err)))?;
+        if remote.is_absolute() || remote.components().any(|component: Component<'_>| !matches!(component, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(ToolExecutionError::invalid_args("Invalid remote path. Only paths relative to /workspace are allowed."));
+        }
 
-    return Ok(());
+        let file: &Path = Path::new(&filename);
+        let mut components: Components<'_> = file.components();
+
+        if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some()
+        {
+            return Err(ToolExecutionError::invalid_args("Invalid filename. Expected a single file name."));
+        }
+
+        let mut archive: Builder<Vec<u8>> = Builder::new(Vec::new());
+        let mut header: Header = Header::new_gnu();
+
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+
+        archive.append_data(&mut header, &filename, content.as_bytes())
+        .map_err(|err| ToolExecutionError::other(format!("Failed to archive text file: {:?}", err)))?;
+
+        let files: Vec<u8> = archive.into_inner()
+        .map_err(|err| ToolExecutionError::other(format!("Failed to finalize TAR archive: {:?}", err)))?;
+
+        container::send_data(&id, &path, files).await
+        .map_err(|err| ToolExecutionError::other(format!("Failed to upload text file: {:?}", err)))?;
+
+        Ok(())
+    }.await;
+
+    match result
+    {
+        Ok(()) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(());
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
+    }
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "download_path",
     description = "Download a file or directory from a Docker sandbox container and extract it into the agent workspace.",
@@ -287,18 +581,82 @@ pub async fn send_text(id: String, path: String, filename: String, content: Stri
 )]
 pub async fn download_path(id: String, remote_path: String, local_path: String) -> Result<(), ToolExecutionError>
 {
-    let files: Vec<u8> = container::load_data(&id, &remote_path).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to download files: {:?}", err)))?;
+    let time: Instant = Instant::now();
 
-    let destination: PathBuf = Path::new("/agent/workspace").join(&local_path);
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    let mut archive: Archive<&[u8]> = Archive::new(files.as_slice());
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "download_path", remote_path, local_path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:?}}}\t|\t{:?}", "download_path", remote_path, local_path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    archive.unpack(&destination).map_err(|err| ToolExecutionError::other(format!("Failed to extract TAR archive: {:?}", err)))?;
+    let result: Result<(), ToolExecutionError> = async
+    {
+        let remote: &Path = Path::new(&remote_path);
 
-    return Ok(());
+        if remote.is_absolute() || remote.components().any(|component: Component<'_>| !matches!(component, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(ToolExecutionError::invalid_args("Invalid remote path. Only paths relative to /workspace are allowed."));
+        }
+
+        let local: &Path = Path::new(&local_path);
+
+        if local.is_absolute() || local.components().any(|component: Component<'_>| !matches!(component, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(ToolExecutionError::invalid_args("Invalid local path. Only paths relative to the agent workspace are allowed."));
+        }
+
+        let destination: PathBuf = Path::new("/agent/workspace").join(local);
+
+        let files: Vec<u8> = container::load_data(&id, &remote_path).await
+        .map_err(|err| ToolExecutionError::other(format!("Failed to download files: {:?}", err)))?;
+
+        let mut archive: Archive<&[u8]> = Archive::new(files.as_slice());
+
+        archive.unpack(&destination)
+        .map_err(|err| ToolExecutionError::other(format!("Failed to extract TAR archive: {:?}", err)))?;
+
+        Ok(())
+    }.await;
+
+    match result
+    {
+        Ok(()) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(());
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
+    }
 }
 
+#[cfg(feature = "docker")]
 #[rig_tool(
     name = "read_container_file",
     description = "Read the UTF-8 contents of a text file inside a Docker sandbox container without saving it locally.",
@@ -311,31 +669,88 @@ pub async fn read_container_file(id: String, filename: String) -> Result<String,
 {
     use std::io::Read;
 
-    let files: Vec<u8> = container::load_data(&id, &filename).await
-    .map_err(|err| ToolExecutionError::other(format!("Failed to download text file: {:?}", err)))?;
+    let time: Instant = Instant::now();
 
-    let mut archive: Archive<&[u8]> = tar::Archive::new(files.as_slice());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    let entries: Entries<'_, &[u8]> = archive.entries()
-    .map_err(|err| ToolExecutionError::other(format!("Failed to read TAR archive: {:?}", err)))?;
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "read_container_file", filename, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "read_container_file", filename, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
 
-    for entry in entries.into_iter()
+    let result: Result<String, ToolExecutionError> = async
     {
-        let mut entry: Entry<'_, &[u8]> = entry.map_err(|err| ToolExecutionError::other(format!("Failed to read TAR entry: {:?}", err)))?;
+        let file: &Path = Path::new(&filename);
 
-        if !entry.header().entry_type().is_file()
+        if file.file_name().is_none() || file.is_absolute() || file.components().any(|component: Component<'_>| !matches!(component, Component::Normal(_) | Component::CurDir))
         {
-            continue;
+            return Err(ToolExecutionError::invalid_args("Invalid filename. Only file paths relative to /workspace are allowed."));
         }
 
-        let mut content: String = String::new();
+        let files: Vec<u8> = container::load_data(&id, &filename).await
+        .map_err(|err| ToolExecutionError::other(format!("Failed to download text file: {:?}", err)))?;
 
-        entry.read_to_string(&mut content).map_err(|err| ToolExecutionError::other(format!("Failed to decode text file: {:?}", err)))?;
+        let mut archive: Archive<&[u8]> = Archive::new(files.as_slice());
 
-        return Ok(content);
+        let entries: Entries<'_, &[u8]> = archive.entries()
+        .map_err(|err| ToolExecutionError::other(format!("Failed to read TAR archive: {:?}", err)))?;
+
+        for entry in entries.into_iter()
+        {
+            let mut entry: Entry<'_, &[u8]> = entry
+            .map_err(|err| ToolExecutionError::other(format!("Failed to read TAR entry: {:?}", err)))?;
+
+            if !entry.header().entry_type().is_file()
+            {
+                continue;
+            }
+
+            let mut content: String = String::new();
+
+            entry.read_to_string(&mut content)
+            .map_err(|err| ToolExecutionError::other(format!("Failed to decode text file: {:?}", err)))?;
+
+            return Ok(content);
+        }
+
+        return Err(ToolExecutionError::not_found("No regular file found in downloaded archive."));
+    }.await;
+
+    match result
+    {
+        Ok(content) =>
+        {
+            info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Ok(content);
+        }
+
+        Err(err) =>
+        {
+            error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+            Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time.elapsed()))
+            .expect("Ошибка связи с консолью");
+
+            return Err(err);
+        }
     }
-
-    return Err(ToolExecutionError::not_found("No regular file found in downloaded archive."));
 }
 
 #[rig_tool(
@@ -412,7 +827,6 @@ pub async fn http_request(url: String, req_type: String, post_data: Option<HashM
     }).map_err(ToolExecutionError::from_error);
 }
 
-/*
 #[rig_tool(
     name = "dump_env",
     description = "Return available environment variables."
@@ -428,7 +842,6 @@ pub async fn dump_env() -> Result<String, ToolExecutionError>
         res.extract::<String>(py) //Принят return как String
     }).map_err(ToolExecutionError::from_error);
 }
-*/
 
 #[rig_tool(
     name = "find_files",
@@ -479,6 +892,7 @@ pub async fn directory_contents(path: Option<String>) -> Result<String, ToolExec
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_bandit",
     description = "Run Bandit SAST analysis for Python code. Returns detected issues and skipped files as JSON.",
@@ -513,6 +927,7 @@ conf_level: Option<String>) -> Result<String, ToolExecutionError>
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "sast")]
 #[rig_tool(
     name = "run_semgrep",
     description = "Run Semgrep SAST analysis using configured rules. The p/security-audit and p/secrets rulesets are always included.",
@@ -538,6 +953,7 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_zap",
     description = "Runs OWASP ZAP in Docker, scans the target URL \
@@ -576,6 +992,7 @@ pub async fn run_zap(
     }).map_err(ToolExecutionError::from_error);
 }
 
+#[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_nuclei",
     description = "Runs Nuclei, scans the target URL using templates \
@@ -614,4 +1031,699 @@ pub async fn run_nuclei(
     return Python::attach(|py: Python<'_>| {
         res.extract::<String>(py)
     }).map_err(ToolExecutionError::from_error);
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_read_text_file",
+    description = "Read a UTF-8 text file directly from the agent filesystem.",
+    params(
+        path = "Absolute or relative path to the file."
+    )
+)]
+pub async fn unsafe_read_text_file(path: String) -> Result<String, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_text_file", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_text_file", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<String, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_read_text_file(&path)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(text) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(text);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed()); 
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");  
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_read_bin_file",
+    description = "Read a file as raw binary data from the agent filesystem.",
+    params(
+        path = "Absolute or relative path to the file."
+    )
+)]
+pub async fn unsafe_read_bin_file(path: String) -> Result<Vec<u8>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_bin_file", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_read_bin_file", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<Vec<u8>, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_read_bin_file(&path)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(data) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(data);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_write_text_file",
+    description = "Create or overwrite a text file directly in the agent filesystem.",
+    params(
+        path = "Absolute or relative destination file path.",
+        text = "Text content to write into the file."
+    )
+)]
+pub async fn unsafe_write_text_file(path: String, text: String) -> Result<(), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_text_file", path, text, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_text_file", path, text, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_write_text_file(&path, &text)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(()) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(());
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_write_bin_file",
+    description = "Create or overwrite a binary file directly in the agent filesystem.",
+    params(
+        path = "Absolute or relative destination file path.",
+        data = "Binary content represented as an array of bytes."
+    )
+)]
+pub async fn unsafe_write_bin_file(path: String, data: Vec<u8>) -> Result<(), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_bin_file", path, data, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}}}\t|\t{:?}", "unsafe_write_bin_file", path, data, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_write_bin_file(&path, &data)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(()) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(());
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_execute",
+    description = "Execute a shell command directly in the agent runtime and return stdout, stderr, and exit code.",
+    params(
+        command = "Shell command to execute using sh -c."
+    )
+)]
+pub async fn unsafe_execute(command: String) -> Result<(String, String, Option<i32>), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_execute", command, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_execute", command, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(String, String, Option<i32>), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_execute(&command)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_http_get",
+    description = "Perform an HTTP or HTTPS GET request from the agent runtime.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        headers = "Optional dictionary of HTTP request headers.",
+        timeout = "Optional request timeout in seconds. Default: 15."
+    )
+)]
+pub async fn unsafe_http_get(url: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_get", url, headers, timeout, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_get", url, headers, timeout, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(u16, String), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_http_get(&url, headers, timeout)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_http_post",
+    description = "Perform an HTTP or HTTPS POST request with a text body from the agent runtime.",
+    params(
+        url = "Target HTTP or HTTPS URL.",
+        data = "Request body sent as text without automatic JSON serialization.",
+        headers = "Optional dictionary of HTTP request headers.",
+        timeout = "Optional request timeout in seconds. Default: 15."
+    )
+)]
+pub async fn unsafe_http_post(url: String, data: String, headers: Option<HashMap<String, String>>, timeout: Option<u64>) -> Result<(u16, String), ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {{{:?}, {:#?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_post", url, headers, data, timeout, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {{{:?}, {:#?}, {:#?}, {:?}}}\t|\t{:?}", "unsafe_http_post", url, headers, data, timeout, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<(u16, String), ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_http_post(&url, &data, headers, timeout)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_directory_contents",
+    description = "List files and directories directly in the agent filesystem without recursive traversal.",
+    params(
+        path = "Absolute or relative directory path."
+    )
+)]
+pub async fn unsafe_directory_contents(path: String) -> Result<Vec<String>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_directory_contents", path, time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван с {:?}\t|\t{:?}", "unsafe_directory_contents", path, time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<Vec<String>, ToolExecutionError>
+    {
+        match unsafe_tools::unsafe_directory_contents(&path)
+        .map_err(ToolExecutionError::from_error)
+        {
+            Ok(res) =>
+            {
+                info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Ok(res);
+            }
+
+            Err(err) =>
+            {
+                error!("\nОшибка выполнения - {:?}\t|\t{:?}", err, time.elapsed());
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                Out::Text(format!("Ошибка выполнения - {:?}\t|\t{:?}", err, time.elapsed())))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+                .expect("Ошибка связи с консолью");
+
+                return Err(err);
+            }
+        }
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
+}
+
+#[cfg(feature = "unsafe_tools")]
+#[rig_tool(
+    name = "unsafe_dump_env",
+    description = "Return agent process environment variables, excluding explicitly blacklisted keys."
+)]
+pub async fn unsafe_dump_env() -> Result<HashMap<String, String>, ToolExecutionError>
+{
+    let time: Instant = Instant::now();
+
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedStart)
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    info!("\nИнструмент {:?} вызван\t|\t{:?}", "unsafe_dump_env", time.elapsed());
+    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+    Out::Text(format!("Инструмент {:?} вызван\t|\t{:?}", "unsafe_dump_env", time.elapsed())))
+    .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка связи с консолью");
+
+    let verdict: GuardResponse = unsafe_guard();
+
+    if !verdict.allowed
+    {
+        warn!("\nВердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Вердикт: гвард запретил - {:?}\t|\t{:?}", verdict.reason, time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Err(ToolExecutionError::permission_denied(verdict.reason));
+    }
+
+    return tokio::task::spawn_blocking(move || -> Result<HashMap<String, String>, ToolExecutionError>
+    {
+        let res: HashMap<String, String> = unsafe_tools::unsafe_dump_env();
+
+        info!("\nУспешно выполнено\t|\t{:?}", time.elapsed());
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+        Out::Text(format!("Успешно выполнено\t|\t{:?}", time.elapsed())))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(Out::CompressedEnd)
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time.elapsed()))
+        .expect("Ошибка связи с консолью");
+
+        return Ok(res);
+    }).await.inspect_err(|err| error!("Ошибка присоединения потока исполения - {:?}\t|\t{:?}", err, time.elapsed()))
+    .expect("Ошибка присоединения потока исполения");
 }

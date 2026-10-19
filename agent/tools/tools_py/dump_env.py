@@ -9,21 +9,16 @@ __tool_meta__ = {
     }
 }
 
-# Можно будет расширить потом
-BLACK_LIST = ["PASSWORD", "TOKEN", "SECRET"]
-
-# Проверяет вхождения слов из черного списка
-def is_env_secure(env : dict) -> bool:
-    return not any(black in key for black in BLACK_LIST for key in env)
+BLACK_LIST = ["MAIN_MODEL_API_KEY", "OPENROUTER_API_KEY", "VEGA_AGENT_SESSION_ID", "DEEPSEEK_LOCAL_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL", "LOCAL_AGENT_MODEL"]
 
 # Создает строку из переменных окружения
 def get_env() -> str:
     env = dict(os.environ)
 
-    if (is_env_secure(env)): 
-        return json.dumps(env, indent=4)
+    for key in BLACK_LIST:
+        env.pop(key, None)
 
-    return ""
+    return json.dumps(env, indent=4, ensure_ascii=False)
 
 # Дампит переменные окружения в stdout как json
 def dump_env() -> str:

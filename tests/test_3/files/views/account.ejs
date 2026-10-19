@@ -1,0 +1,29 @@
+<h1>Account</h1>
+<% if (typeof saved !== 'undefined' && saved) { %><p class="ok-box">Profile saved.</p><% } %>
+<div class="two-col">
+  <div>
+    <h2>Profile</h2>
+    <!-- VULN (A06): role and balance are editable through this form. -->
+    <form method="post" action="/account" class="form">
+      <label>Username <input name="username" value="<%= user.username %>"></label>
+      <label>Email <input name="email" value="<%= user.email %>"></label>
+      <label>Role <input name="role" value="<%= user.role %>"></label>
+      <label>Balance (cents) <input name="balance" value="<%= user.balance %>"></label>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+  </div>
+  <div>
+    <h2>API token</h2>
+    <p class="muted">The single-page widgets use this token. It lives in <code>localStorage</code>.</p>
+    <% if (token) { %>
+      <pre class="token" id="api-token"><%= token %></pre>
+      <p class="muted">Preview: <code id="api-me">loading…</code></p>
+    <% } else { %>
+      <form method="post" action="/account/token"><button type="submit" class="btn btn-primary">Generate API token</button></form>
+    <% } %>
+
+    <h2>Preferences JSON</h2>
+    <pre id="prefs"><%= prefs %></pre>
+    <p class="muted">Update preferences with a JSON request to <code>/preferences</code>.</p>
+  </div>
+</div>

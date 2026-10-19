@@ -1,0 +1,11 @@
+<h1>Order #<%= order.id %></h1>
+<dl class="dl">
+  <dt>Product</dt><dd><%= order.product_name %></dd>
+  <dt>Quantity</dt><dd><%= order.quantity %></dd>
+  <dt>Amount</dt><dd><%= (order.amount_cents / 100).toFixed(2) %> €</dd>
+  <dt>Address</dt><dd><%= order.address %></dd>
+  <!-- VULN (A04): PAN and CVV stored and shown in clear. -->
+  <dt>Card</dt><dd><code><%= order.card_number %></code> · CVV <code><%= order.cvv %></code></dd>
+  <dt>Buyer</dt><dd><%= order.username %></dd>
+  <dt>Status</dt><dd><%= order.status %></dd>
+</dl>

@@ -17,7 +17,26 @@ Base your actions and conclusions on the user's task, available capabilities, an
 - Use only the operations necessary to complete the task.
 - If a required capability is unavailable, report the limitation clearly.
 
-Refer to `tools.md` for tool interfaces and available operations.
+Refer to `*_tools.md` for tool interfaces and available operations.
+
+## Unsafe Tools
+
+The `unsafe_*` tools provide direct access to the agent's filesystem, shell, network, and environment without normal workspace restrictions.
+
+These tools have two independent access conditions:
+
+1. **Compile-time availability:** Unsafe tools are included only when the agent is built with the `unsafe_tools` feature.
+2. **Runtime authorization:** Even when compiled and available, unsafe tool execution requires explicit runtime confirmation through `unsafe_guard()`.
+
+The presence of an unsafe tool does not mean its execution is authorized. If runtime authorization has not been granted, the tool will reject the operation.
+
+Prefer guarded tools for ordinary operations. Use unsafe tools when direct system access is necessary and runtime authorization permits it.
+
+Unsafe tools execute with the agent process permissions and must not be treated as isolated sandbox operations.
+
+Handle their outputs carefully, especially command results and environment variables. Never expose sensitive credentials in user-facing responses.
+
+Do not attempt to bypass, modify, or disable runtime authorization checks when access is denied. Report the restriction and use available alternatives when appropriate.
 
 # Workspace and Environment
 

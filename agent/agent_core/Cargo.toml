@@ -3,6 +3,27 @@ name = "agent_core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["tui", "docker", "sast", "dast"]
+
+tui = [
+    "dep:ratatui",
+    "dep:crossterm",
+    "dep:tui-textarea"
+]
+
+docker = [
+    "dep:bollard",
+    "dep:rustls",
+    "dep:futures-util",
+    "dep:tar"
+]
+
+sast = []
+dast = []
+
+unsafe_tools = [ "dep:tools_rs" ]
+
 [dependencies]
 dotenvy = "0.15.7"
 include_dir = "0.7.4"
@@ -15,15 +36,14 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "process"
 tracing = { version = "0.1.44", features = ["async-await"] }
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-
-tools_rs = { path = "../tools/tools_rs" }
-crossterm = { version = "0.29.0" }
-ratatui = "0.30.2"
-tui-textarea = { package = "tui-textarea-2", version = "0.13" }
-bollard = { version = "0.21.1", features = ["ssl"] }
-rustls = { version = "0.23", features = ["aws_lc_rs"] }
-futures-util = "0.3.34"
-tar = "0.4.46"
+tools_rs = { path = "../tools/tools_rs", optional = true }
+crossterm = { version = "0.29.0", optional = true }
+ratatui = { version = "0.30.2", optional = true }
+tui-textarea = { package = "tui-textarea-2", version = "0.13", optional = true }
+bollard = { version = "0.21.1", features = ["ssl"], optional = true }
+rustls = { version = "0.23", features = ["aws_lc_rs"], optional = true }
+futures-util = { version = "0.3.34", optional = true }
+tar = { version = "0.4.46", optional = true }
 
 [lints.clippy]
 needless_return = "allow"

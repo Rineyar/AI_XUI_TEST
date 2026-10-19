@@ -24,12 +24,14 @@ use tracing::{error, info, warn}; //Макросы логирования
 
 pub static CONSOLE_OUT_TX: OnceLock<mpsc::Sender<Out>> = OnceLock::new(); //Отправщик для консоли
 
+#[derive(Debug)]
 enum ConsoleOut
 {
     Text(String),
     Compressed(CompressedOut),
 }
 
+#[derive(Debug)]
 struct CompressedOut
 {
     id: usize,
@@ -175,6 +177,9 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                     Out::Shutdown =>
                     {
                         running = false;
+
+                        info!("\nЛог последнего вывода:\n{:#?}\n", state);
+
                         break;
                     }
 
@@ -276,7 +281,7 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                                 warn!("id блока не существует");
                                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
                                 Out::Text(String::from("id блока не существует")))
-                                .inspect_err(|err| error!("\nОшибка связи с консолью - {}", err))
+                                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}", err))
                                 .expect("Ошибка связи с консолью");
 
                                 continue;
@@ -301,6 +306,8 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
 
                     Out::Clear =>
                     {
+                        info!("\nЛог последнего вывода:\n{:#?}\n", state);
+                        
                         state.clear();
                         compressed_index.clear();
                         current_compressed = None;
@@ -328,7 +335,8 @@ pub fn spawn_console_thread(prompt_tx: tokio::sync::mpsc::UnboundedSender<String
                                 let prompt: String = input.lines().join("\n");
 
                                 prompt_tx.send(prompt)
-                                    .expect("Main больше не принимает ввод");
+                                .inspect_err(|err| error!("Ошибка отправки запроса - {:?}", err))
+                                .expect("Ошибка отправки запроса");
 
                                 input = TextArea::default();
                             }
@@ -447,7 +455,7 @@ pub async fn print_model_list(model: &Client<OpenAICompletionsExt>, time_start: 
         info!("№{}: {:?}", i + 1, model.id);
         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
         Out::Text(format!("№{}: {:?}", i + 1, model.id)))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
         .expect("Ошибка связи с консолью");
     }
 }

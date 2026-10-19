@@ -1,0 +1,30 @@
+<h1>Admin tools</h1>
+<div class="two-col">
+  <div>
+    <h2>URL fetcher</h2>
+    <p class="muted">Fetch the contents of a URL from the server.</p>
+    <% if (typeof result !== 'undefined' && result) { %>
+      <p>URL: <code><%= result.url %></code> — status <%= result.status %></p>
+      <pre class="response"><%= result.body %></pre>
+    <% } %>
+    <form method="post" action="/tools/fetch" class="form">
+      <label>URL <input name="url" placeholder="https://example.com" required></label>
+      <label>Bearer token (optional) <input name="token"></label>
+      <button type="submit" class="btn btn-primary">Fetch</button>
+    </form>
+  </div>
+  <div>
+    <h2>Regex validator</h2>
+    <p class="muted">Test a JavaScript regular expression against text.</p>
+    <% if (typeof regexResult !== 'undefined' && regexResult) { %>
+      <p>Pattern <code><%= regexResult.pattern %></code> → match: <strong><%= regexResult.match %></strong></p>
+    <% } %>
+    <form method="post" action="/tools/regex" class="form">
+      <label>Pattern <input name="pattern" value="^\d+$" required></label>
+      <label>Input <textarea name="input" rows="3">12345</textarea></label>
+      <button type="submit" class="btn btn-primary">Test</button>
+    </form>
+    <% if (typeof error !== 'undefined' && error) { %><p class="error-box"><%= error %></p><% } %>
+  </div>
+</div>
+<p><a href="/tools/vault-check">Run vault check</a> (calls IMDS + vault from the server).</p>

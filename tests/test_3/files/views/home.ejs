@@ -1,0 +1,34 @@
+<section class="hero">
+  <div class="hero-copy">
+    <h1>NodeBazaar</h1>
+    <p class="lede">Browse products, read reviews, and place a simulated order.</p>
+  </div>
+</section>
+
+<section class="cats-band">
+  <h2>Categories</h2>
+  <div class="cats-grid">
+    <% categories.forEach(function (c) { %>
+      <a class="cat-card" href="/categories/<%= c.category %>">
+        <strong><%= c.category %></strong>
+        <span><%= c.n %> products</span>
+      </a>
+    <% }) %>
+  </div>
+</section>
+
+<section id="featured">
+  <h2>Featured products</h2>
+  <div class="grid">
+    <% featured.forEach(function (p) { %>
+      <a class="card" href="/products/<%= p.id %>">
+        <img src="/img/<%= p.image %>" alt="<%= p.name %>" loading="lazy">
+        <div class="card-body">
+          <h3><%= p.name %></h3>
+          <p class="muted"><%= p.description %></p>
+          <span class="price"><%= (p.price_cents / 100).toFixed(2) %> EUR</span>
+        </div>
+      </a>
+    <% }) %>
+  </div>
+</section>
