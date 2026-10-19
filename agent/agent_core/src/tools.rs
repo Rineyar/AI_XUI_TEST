@@ -165,7 +165,7 @@ async fn call_py_tool(request: ToolRequest) -> Result<Py<PyAny>, ToolExecutionEr
                     .expect("Ошибка связи с консолью");
                 }
                 
-                Err(_) => 
+                Err(_) => /*TODO т.к. в логи кидается весь ret ошибки */
                 {
                     error!("\nОшибка выполнения - {:?}\t|\t{:?}", ret, time.elapsed()); 
                     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
