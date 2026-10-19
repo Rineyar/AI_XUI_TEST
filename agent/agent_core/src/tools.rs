@@ -810,28 +810,25 @@ pub async fn run_semgrep(targets: Option<Vec<String>>, configs: Option<Vec<Strin
 #[cfg(feature = "dast")]
 #[rig_tool(
     name = "run_zap",
-    description = "Runs OWASP ZAP in Docker, scans the target URL \
+    description = "Runs OWASP ZAP in Docker, scans the target URL using plan\
                    and returns a JSON report with discovered vulnerabilities.",
     params(
-        url = "Target URL to scan (e.g., http://example.com).",
-        do_ascan = "Enable active scanning (true/false). Default: false.",
-        spider_timeout = "Spider timeout in seconds. Default: 600.",
-        ascan_timeout = "Active scan timeout in seconds. Default: 1800."
+        target_url = "Target URL to scan (e.g., http://example.com).",
+        plan_template = "Plan of scan from workspace zap_plans",
+        timeout = "Plan timeout in seconds. Default: 1800."
     )
 )]
 pub async fn run_zap(
-    url: String,
-    do_ascan: Option<bool>,
-    spider_timeout: Option<i32>,
-    ascan_timeout: Option<i32>,
+    target_url: String,
+    plan_template: String,
+    timeout: Option<i32>,
 ) -> Result<String, ToolExecutionError>
 {
     // Collect arguments
-    let mut args: Map<String, Value> = Map::with_capacity(4);
-    insert_arg(&mut args, "url", Some(url));                 // required
-    insert_arg(&mut args, "do_ascan", do_ascan);             // optional
-    insert_arg(&mut args, "spider_timeout", spider_timeout); // optional
-    insert_arg(&mut args, "ascan_timeout", ascan_timeout);   // optional
+    let mut args: Map<String, Value> = Map::with_capacity(3);
+    insert_arg(&mut args, "target_url", Some(target_url));              
+    insert_arg(&mut args, "plan_template", Some(plan_template)); 
+    insert_arg(&mut args, "timeout", timeout); 
 
     // Call the Python function
     let res: Py<PyAny> = call_py_tool(ToolRequest {
@@ -852,7 +849,7 @@ pub async fn run_zap(
     description = "Runs Nuclei, scans the target URL using templates \
                    and returns a JSON report with discovered vulnerabilities.",
     params(
-        target_url = "Target URL to scan (http protocol only).",
+        target_url = "Target URL to scan (http/https protocol only).",
         template = "Template name from the agent folder (a .yaml file). \
                     If not specified, built-in Nuclei templates are used.",
         severity = "Comma-separated severity levels to search for \
@@ -868,7 +865,7 @@ pub async fn run_nuclei(
 ) -> Result<String, ToolExecutionError>
 {
     // Collect arguments
-    let mut args: Map<String, Value> = Map::with_capacity(3);
+    let mut args: Map<String, Value> = Map::with_capacity(4);
     insert_arg(&mut args, "target_url", Some(target_url)); // required
     insert_arg(&mut args, "template", template);           // optional
     insert_arg(&mut args, "severity", severity);           // optional

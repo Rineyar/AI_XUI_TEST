@@ -207,24 +207,22 @@ Example:
 
 ## run_zap
 
-Runs OWASP ZAP in a temporary Docker container, scans the specified URL, returns a JSON report, and attempts to remove the container afterward (including after errors).  
+Runs OWASP ZAP in a temporary Docker container, executes a ZAP Automation Framework plan against the specified URL, returns a JSON report, and attempts to remove the container and the generated plan YAML file afterward (including after errors).  
 Use when you need DAST analysis of an authorized local web application via ZAP. Docker access must be available to the agent.
 
 Arguments:
-- `url` — target HTTP or HTTPS URL, reachable from the agent/ZAP network (the guard restricts DAST targets to local/private addresses)
-    - Example: `"http://127.0.0.1:3000"`
-- `spider_timeout` — spider scan timeout in seconds; default `600`
-    - Example: `600`
-- `ascan_timeout` — active scan timeout in seconds; default `1800`
+- `target_url` — target HTTP or HTTPS URL, reachable from the agent/ZAP network (the guard restricts DAST targets to local/private addresses)
+    - Example: `"http://127.0.0.1:5000"`
+- `plan_template` — path to the Automation Framework YAML plan template; the `{{TARGET}}` placeholder is replaced with `target_url`. Default: `"plan.yaml.tpl"`
+    - Example: `"plan.yaml.tpl"`
+- `timeout` — maximum time to wait for the automation plan to finish, in seconds; default `1800`
     - Example: `1800`
-- `do_ascan` — whether to perform an active scan; default `false`
-    - Example: `false`
 
 Returns:
 - JSON string with fields `success`, `output`, `error`
 - `output` contains:
-    - `target` — target
-    - `ascan_done` — whether active scan was performed
+    - `target` — scan target
+    - `plan_id` — ID of the launched ZAP automation plan
     - `alerts_count` — number of alerts
     - `alerts` — list of alerts
 
@@ -233,8 +231,8 @@ Example:
 {
     "success": true,
     "output": {
-        "target": "http://127.0.0.1:3000",
-        "ascan_done": false,
+        "target": "http://127.0.0.1:5000",
+        "plan_id": "1",
         "alerts_count": 0,
         "alerts": []
     },

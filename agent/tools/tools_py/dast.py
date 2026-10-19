@@ -11,8 +11,8 @@ __all__ = ["run_nuclei","run_zap"]
 
 __tool_meta__ = {
     "run_zap": {
-        "description": "run_zap tool. Запускает OWASP ZAP в Docker, "
-                       "сканирует указанный URL и возвращает JSON-отчёт."
+        "description": "run_zap tool. Runs OWASP ZAP in Docker, "
+                       "scans target URL and returns JSON-report."
     },
     "run_nuclei": {
             "description": "Runs Nuclei — a DAST tool for checking an HTTP target against templates."  
@@ -32,7 +32,7 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
             os.environ["NUCLEI_TEMPLATES_DIR"]
         ).resolve(strict=True)
 
-        requested = Path(template) if template else Path(".")
+        requested = Path(template)
 
         if requested.is_absolute() or ".." in requested.parts:
             raise ValueError("Недопустимый путь к шаблону")
@@ -73,7 +73,6 @@ def run_nuclei(target_url: str, template: str = None, severity: str = "info,low,
 IMAGE = "zaproxy/zap-stable"
 PORT = 8090
 KEY = "zapkey123"
-PLANS_DIR = "zap_plans"
 cont_name = "zap-daemon"
 ZAP_BASE_URL = os.environ.get(
     "ZAP_BASE_URL",
@@ -141,16 +140,20 @@ def run_zap(*, target_url: str, plan_template: str = "plan.yaml.tpl", timeout: i
     output = {"success": False, "output": "", "error": ""}
     plan_host_path = None
 
+    plans_dir = Path(
+                os.environ["ZAP_PLANS_DIR"]
+            ).resolve(strict=True)
+
     try:
-        os.makedirs(PLANS_DIR, exist_ok=True)
+        os.makedirs(plans_dir, exist_ok=True)
         subprocess.run(["docker", "rm", "-f", cont_name], capture_output=True, text=True)
 
         cmd = [
             "docker", "run", "-d",
             "--name", cont_name,
-            "--add-host=host.docker.internal:host-gateway",   # ← для Linux
+            "--add-host=host.docker.internal:host-gateway",
             "-p", f"{PORT}:{PORT}",
-            "-v", f"{os.path.abspath(PLANS_DIR)}:/zap/wrk:rw",
+            "-v", f"{os.path.abspath(plans_dir)}:/zap/wrk:rw",
             IMAGE,
             "zap.sh", "-daemon",
             "-host", "0.0.0.0",
@@ -166,24 +169,32 @@ def run_zap(*, target_url: str, plan_template: str = "plan.yaml.tpl", timeout: i
         if not prob.get("accessUrl"):
             raise Exception(f"Цель недоступна из ZAP: {target_url}")
 
-        with open(plan_template) as f:
+        requested = Path(plan_template)
+
+        if requested.is_absolute() or ".." in requested.parts:
+            raise ValueError("Недопустимый путь к плану")
+
+        template_path = (plans_dir / requested).resolve(strict=True)
+
+        if not template_path.is_relative_to(plans_dir):
+            raise ValueError("План находится вне каталога Zap")
+
+        with open(template_path) as f:
             plan_content = f.read().replace("{{TARGET}}", target_url)
 
         plan_filename = f"plan_{int(time.time())}.yaml"
-        plan_host_path = os.path.join(PLANS_DIR, plan_filename)
+        plan_host_path = os.path.join(plans_dir, plan_filename)
         with open(plan_host_path, "w") as f:
             f.write(plan_content)
 
-        # runPlan — просто через _zap_api
         run_resp = _zap_api("/JSON/automation/action/runPlan/",
                             {"filePath": f"/zap/wrk/{plan_filename}"})
         plan_id = run_resp.get("planId")
         if not plan_id:
             raise Exception(f"API не вернул planId: {run_resp}")
-        if plan_id in ("", "0"):
+        if plan_id == "":
             raise Exception(f"planId не валидный: {run_resp}")
 
-        # ожидание — тоже через _zap_api
         start = time.time()
         while time.time() - start < timeout:
             p = _zap_api("/JSON/automation/view/planProgress/", {"planId": plan_id})

@@ -65,8 +65,9 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
-ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
-ENV AUTO=1
+ENV NUCLEI_TEMPLATES_DIR=/agent/workspace/nuclei-templates
+ENV ZAP_PLANS_DIR=/agent/workspace/zap_plans
+ENV AUTO=0
 ENV UNSAFE=1
 
 #Создание пользователя и Изолятора
@@ -86,7 +87,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 #Nuclei с доступом из path
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
-COPY --from=nuclei-templates-builder /nuclei-templates /agent/tools/nuclei-templates
 
 #Взять собранный под контейнер ELF
 COPY --from=rust-builder /build/agent_core /agent/agent_core/agent_core
@@ -100,6 +100,12 @@ COPY --chown=root:root agent/tools /agent/workspace/self/tools
 COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
 COPY --chown=root:root agent/skills /agent/workspace/self/skills
 
+# Добавление шаблонов nuclei
+COPY --from=nuclei-templates-builder /nuclei-templates /agent/workspace/nuclei-templates
+
+# Добавление планов zap
+COPY --chown=root:root /zap_plans /agent/workspace/zap_plans
+
 #Добавление тестовых проектов
 COPY --chown=root:root tests /agent/workspace/tests
 
@@ -108,15 +114,18 @@ COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
 
 #Стартуем
 #==========================================#
-#Дальше пашешь ты
-USER agent
 
-#Скрипт запуска
+#Скрипт запуска + авточистка
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY cleanup.sh /usr/local/bin/cleanup.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/cleanup.sh
 
 #Задание для автономной работы
 COPY agent/strategy.md /agent/strategy.md
 
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
+# Агенту только в entrypoint
+USER root
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/cleanup.sh"]
 CMD ["-S"]
 #==========================================#

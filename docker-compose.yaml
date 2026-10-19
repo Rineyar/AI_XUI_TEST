@@ -10,6 +10,7 @@ services:
     volumes:
       - sandbox-certs:/certs/client
       - sandbox-data:/home/rootless/.local/share/docker
+      - zap-plans-shared:/agent/workspace/zap_plans
 
     networks:
       - sandbox-control
@@ -58,13 +59,17 @@ services:
       - sandbox-certs:/certs/client:ro  
     #  - ./agent/logs/selfanalysys.md:/agent/workspace/selfanalysys.md #РАскоменчивать на свой страх и риск. Удалять только на страх
       - ./agent/workspace:/agent/import:ro
+      - zap-plans-shared:/agent/workspace/zap_plans
 
+    # 30 секунд, чтобы всё за собой убрал
+    stop_grace_period: 30s 
     stdin_open: true
     tty: true
 
 volumes:
   sandbox-certs:
   sandbox-data:
+  zap-plans-shared:
 
 networks:
   sandbox-control:

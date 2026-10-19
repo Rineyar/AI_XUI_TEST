@@ -57,9 +57,7 @@ A timeout or scanner error does not prove that the application is secure.
 
 Use `run_zap` when application crawling or more comprehensive web testing is required.
 
-Start with passive discovery using Spider (`do_ascan=false`).
-
-Use Active Scan (`do_ascan=true`) only when active testing is explicitly permitted and appropriate for the target.
+Use plans in workspace/zap_plans
 
 Active scanning may generate intrusive requests or modify application state.
 
