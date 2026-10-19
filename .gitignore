@@ -12,6 +12,7 @@ Cargo.lock
 !tests/test_1/files/.env
 /vega
 strategy.md
-
+to_agent/
+from_agent/
 # Разрешаем .env во всех подпапках tests/
 !tests/**/.env
