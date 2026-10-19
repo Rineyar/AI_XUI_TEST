@@ -1,5 +1,5 @@
 use bollard::Docker; //Для DinD
-use bollard::models::{ContainerCreateBody, HostConfig, PortBinding}; //Для выбора конта
+use bollard::models::ContainerCreateBody; //Для выбора конта
 use bollard::plugin::ContainerCreateResponse; //Создание конта
 use bollard::query_parameters::{RemoveContainerOptions, RemoveContainerOptionsBuilder}; //Удаление конта
 use bollard::query_parameters::{UploadToContainerOptionsBuilder, UploadToContainerOptions}; //Загрузка туда
@@ -13,7 +13,7 @@ use bollard::query_parameters::CreateImageOptions;
 
 use std::{sync::OnceLock, time::Instant};
 use std::sync::{Mutex, MutexGuard};
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 
 use tracing::{error, info, warn}; //Макросы логирования
 
@@ -75,24 +75,8 @@ pub async fn create_container() -> SandboxResult<String>
     let manager: &SandboxManager = SANDBOX_MANAGER.get().ok_or("Невозможное")
     .inspect_err(|err| error!("{:?}", err)).expect("Невозможное");
 
-    // Публикация портов, жестко фиксирует 0.0.0.0:5000, позволяет держать только 1 контейнер за раз 
-    let mut port_bindings: HashMap<String, Option<Vec<PortBinding>>> = HashMap::new();
-    port_bindings.insert(
-        "5000/tcp".to_string(),
-        Some(vec![PortBinding {
-            host_ip: Some("0.0.0.0".to_string()),
-            host_port: Some("5000".to_string()),
-        }]),
-    );
-
-    let host_config = Some(HostConfig {
-    port_bindings: Some(port_bindings),
-    ..Default::default()
-    });
-    /////////////////////////////////////////
-
-    let config: ContainerCreateBody = ContainerCreateBody { image: Some(IMAGE.to_string()), working_dir: Some("/workspace".to_string()),
-    cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]), host_config, ..Default::default() };
+    let config: ContainerCreateBody = ContainerCreateBody { image: Some("alpine:3.22".to_string()), working_dir: Some("/workspace".to_string()),
+    cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]), ..Default::default() };
 
     let created: ContainerCreateResponse = manager.docker.create_container(None, config).await
     .inspect_err(|err| error!("Ошибка создания контейнера - {:?}", err))?;
