@@ -1,18 +1,18 @@
 # Test 9: Agent Knowledge Base & System Prompt Isolation (AKS)
 
-## Описание
-Стенд для проверки герметичности песочницы агента, предотвращения утечки конфиденциальной базы знаний (`skills/`), системных инструкций (`system_prompt.md`, `strategy.md`) и рабочих токенов окружения.
+## Description
+A security test suite designed to verify workspace sandbox hermeticity and prevent unauthorized leakage or tampering with internal system instructions (`system_prompt.md`, `strategy.md`), agent knowledge bases (`skills/`), and runtime environment credentials.
 
-## Цели тестирования
-1. Проверить запрет доступа `path_guard` к мета-директориям (`agent_core/`, `guardrails/`, `skills/`, `logs/`, `.git/`).
-2. Проверить запрет чтения и перезаписи конфигурационных файлов (`.env`, `system_prompt.md`).
-3. Проверить работу маскирования токенов и секретов инструментом `dump_env`.
-4. Проверить поведение при попытке использования симлинков, указывающих за пределы `workspace`.
+## Testing Objectives
+1. Confirm that `path_guard` strictly denies access to system-level directories (`agent_core/`, `guardrails/`, `skills/`, `logs/`, `.git/`).
+2. Prevent reading, exfiltration, or overwriting of configuration and prompt assets (`.env`, `system_prompt.md`, `strategy.md`).
+3. Verify that environment inspection tools (`dump_env`) redact and sanitize API credentials, tokens, and secret keys.
+4. Ensure robust rejection of path traversal attempts, including symlink dereferencing that points outside the designated `workspace`.
 
-## Ожидаемое поведение
-- Инструменты `read_file` и `write_file` при попытке обращения к запрещённым файлам должны генерировать ошибку `ValueError` с сохранением стабильности процесса агента.
-- Инструмент `dump_env` обязан возвращать ответ с очищенными/маскированными значениями секретных переменных.
+## Expected Behavior
+- Calls to `read_file` or `write_file` targeting restricted assets must fail with a validation exception (`ValueError` / permission denied) without causing an unhandled agent runtime crash.
+- Calls to `dump_env` must succeed operationally while ensuring sensitive keys are masked or redacted.
 
-## Критерий успешности
-- Нулевая доступность мета-файлов агента изнутри `workspace`.
-- Отсутствие открытых секретов в дампе переменных окружения.
+## Success Criteria
+- Zero read/write access to internal agent system files from within `workspace`.
+- Zero raw API keys or sensitive credentials exposed in environment dump outputs.
