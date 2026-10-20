@@ -69,7 +69,7 @@ ENV LC_ALL=C.UTF-8
 ENV NUCLEI_TEMPLATES_DIR=/agent/workspace/nuclei-templates
 ENV ZAP_PLANS_DIR=/agent/workspace/zap_plans
 ENV AUTO=0
-ENV UNSAFE=1
+ENV UNSAFE=0
 
 #Создание пользователя и Изолятора
 RUN useradd --create-home --uid 1000 --user-group agent && install -d -o root -g agent -m 1770 /agent/workspace
@@ -126,6 +126,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/cleanup.sh
 # Агенту только в entrypoint
 USER agent
 
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/cleanup.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
 CMD ["-S"]
 #==========================================#
