@@ -115,10 +115,8 @@ COPY --from=nuclei-templates-builder nuclei-templates /agent/workspace/nuclei-te
 #Стартуем
 #==========================================#
 
-#Скрипт запуска + авточистка
+#Скрипт запуска
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY cleanup.sh /usr/local/bin/cleanup.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/cleanup.sh
 
 #Задание для автономной работы
 # COPY agent/strategy.md /agent/strategy.md
