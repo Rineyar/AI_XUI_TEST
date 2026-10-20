@@ -107,7 +107,7 @@ WORKDIR /agent
 
 # Для Zap
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --chown=root:root zap-plans /agent/workspace/zap-plans
+COPY --chown=root:root agent/tools/tools_py/zap-plans /agent/workspace/zap-plans
 
 # Шаблоны nuclei
 COPY --from=nuclei-templates-builder nuclei-templates /agent/workspace/nuclei-templates
@@ -124,7 +124,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/cleanup.sh
 # COPY agent/strategy.md /agent/strategy.md
 
 # Агенту только в entrypoint
-USER root
+USER agent
 
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/cleanup.sh"]
 CMD ["-S"]
