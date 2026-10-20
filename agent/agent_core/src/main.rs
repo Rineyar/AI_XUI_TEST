@@ -45,6 +45,27 @@ mod container;
 #[cfg(feature = "docker")]
 use container::*;
 
+async fn shutdown_signal()
+{
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        let mut sigterm = signal(SignalKind::terminate()).inspect_err(|err| error!("Ошибка получения стопора - {:?}", err)).expect("Ошибка получения стопора");
+
+        tokio::select!
+        {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = sigterm.recv() => {},
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        tokio::signal::ctrl_c().await.inspect_err(|err| error!("Ошибка получения Ctrl+C - {:?}", err)).expect("Ошибка получения Ctrl+C");
+    }
+}
+
 /*
 Обязательно сделать проверку tools call
 А то эта херь имеет свойство выдумывать.
@@ -390,175 +411,188 @@ async fn main()
     .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
     .expect("Ошибка связи с консолью");
 
-    if *AUTO.get().ok_or("Невероятно").inspect_err(|err| error!("{:?}", err)).expect("Невероятно")
+    tokio::select!
     {
-        let task: String = read_to_string("strategy.md")
-        .inspect_err(|err| error!("Ошибка чтения задания в AUTO режиме - {:?}", err))
-        .expect("Ошибка чтения задания в AUTO режиме");
-
-        let prompt: &str = task.trim();
-
-        info!("Задача:\n{:?}\n{:?}", prompt, time_start.elapsed());
-
-        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-        Out::Text(prompt.to_string()))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-        .expect("Ошибка связи с консолью");
-
-        let time_prompt: Instant = Instant::now();
-
-        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-        Out::Text(String::from("Запрос передан в обработку...")))
-        .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
-        .expect("Ошибка связи с консолью");
-
-        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-        .send(Out::CompressedStart)
-        .expect("Ошибка связи с консолью");
-
-        let response: Result<PromptResponse, _> =  agent.prompt(prompt).extended_details().await;
-
-        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-        .send(Out::CompressedEnd)
-        .expect("Ошибка связи с консолью");
-
-        match response
+        _ = async
         {
-            Ok(response) =>
+            if *AUTO.get().ok_or("Невероятно").inspect_err(|err| error!("{:?}", err)).expect("Невероятно")
             {
-                let response: PromptResponse = response;
+                let task: String = read_to_string("strategy.md")
+                .inspect_err(|err| error!("Ошибка чтения задания в AUTO режиме - {:?}", err))
+                .expect("Ошибка чтения задания в AUTO режиме");
 
-                info!("{}\n\n{:#?}\n\n{:?}\n", response.output, response.usage, time_prompt.elapsed());
+                let prompt: &str = task.trim();
 
-                for call in response.completion_calls.iter()
-                {
-                    info!("\nLLM call №{}: {:?}\n", call.call_index, call.usage);
-                }
-
-                for call in response.completion_calls.iter()
-                {
-                    info!("\nLLM call №{} raw usage: {:?}\n", call.call_index, call.raw.get("usage"));
-                }
+                info!("Задача:\n{:?}\n{:?}", prompt, time_start.elapsed());
 
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                Out::Text(prompt.to_string()))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
-            }
 
-            Err(err) =>
-            {
-                error!("Ошибка ответа!\n{:?}", err);
+                let time_prompt: Instant = Instant::now();
+
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(format!("Ошибка ответа!\n{:?}", err)))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {:#?}\t|\t{:?}", err, time_start.elapsed()))
+                Out::Text(String::from("Запрос передан в обработку...")))
+                .inspect_err(|err| error!("\nОшибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed()))
                 .expect("Ошибка связи с консолью");
-            }
-        }
-    } else {
-        loop //Общение с душевнобольным
-        {
-            let prompt: String = match prompt_rx.recv().await
-            {
-                Some(prompt) => prompt,
 
-                None => break,
-            };
-
-            let prompt: &str = prompt.trim();
-
-            info!("Запрос:\n{:?}\n{:?}", prompt, time_start.elapsed());
-
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::Text(prompt.to_string()))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Ошибка связи с консолью");
-
-            if prompt == "exit"
-            {
-                break;
-            } else if prompt == ":_"
-            {
                 CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-                    .send(Out::Clear)
-                    .expect("Ошибка связи с консолью");
-
-                continue;
-            } else if prompt.is_empty()
-            {
-                warn!("Пустой запрос даст ошибку");
-                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                Out::Text(String::from("Пустой запрос даст ошибку")))
-                .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                .send(Out::CompressedStart)
                 .expect("Ошибка связи с консолью");
 
-                continue;
-            }
+                let response: Result<PromptResponse, _> =  agent.prompt(prompt).extended_details().await;
 
-            let time_prompt: Instant = Instant::now();
+                CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                .send(Out::CompressedEnd)
+                .expect("Ошибка связи с консолью");
 
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-            Out::Text(String::from("Запрос передан в обработку...")))
-            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-            .expect("Ошибка связи с консолью");
-
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-            .send(Out::CompressedStart)
-            .expect("Ошибка связи с консолью");
-
-            let response: Result<PromptResponse, _> =  agent.prompt(prompt).extended_details().await;
-
-            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
-            .send(Out::CompressedEnd)
-            .expect("Ошибка связи с консолью");
-
-            match response
-            {
-                Ok(response) =>
+                match response
                 {
-                    let response: PromptResponse = response;
-
-                    info!("{}\n\n{:#?}\n\n{:?}\n", response.output, response.usage, time_prompt.elapsed());
-
-                    for call in response.completion_calls.iter()
+                    Ok(response) =>
                     {
-                        info!("\nLLM call №{}: {:?}\n", call.call_index, call.usage);
+                        let response: PromptResponse = response;
+
+                        info!("{}\n\n{:#?}\n\n{:?}\n", response.output, response.usage, time_prompt.elapsed());
+
+                        for call in response.completion_calls.iter()
+                        {
+                            info!("\nLLM call №{}: {:?}\n", call.call_index, call.usage);
+                        }
+
+                        for call in response.completion_calls.iter()
+                        {
+                            info!("\nLLM call №{} raw usage: {:?}\n", call.call_index, call.raw.get("usage"));
+                        }
+
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                        Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
+                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                        .expect("Ошибка связи с консолью");
                     }
 
-                    for call in response.completion_calls.iter()
+                    Err(err) =>
                     {
-                        info!("\nLLM call №{} raw usage: {:?}\n", call.call_index, call.raw.get("usage"));
+                        error!("Ошибка ответа!\n{:?}", err);
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                        Out::Text(format!("Ошибка ответа!\n{:?}", err)))
+                        .inspect_err(|err| error!("\nОшибка связи с консолью - {:#?}\t|\t{:?}", err, time_start.elapsed()))
+                        .expect("Ошибка связи с консолью");
+                    }
+                }
+            } else {
+                loop //Общение с душевнобольным
+                {
+                    let prompt: String = match prompt_rx.recv().await
+                    {
+                        Some(prompt) => prompt,
+
+                        None => break,
+                    };
+
+                    let prompt: &str = prompt.trim();
+
+                    info!("Запрос:\n{:?}\n{:?}", prompt, time_start.elapsed());
+
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                    Out::Text(prompt.to_string()))
+                    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                    .expect("Ошибка связи с консолью");
+
+                    if prompt == "exit"
+                    {
+                        break;
+                    } else if prompt == ":_"
+                    {
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                            .send(Out::Clear)
+                            .expect("Ошибка связи с консолью");
+
+                        continue;
+                    } else if prompt.is_empty()
+                    {
+                        warn!("Пустой запрос даст ошибку");
+                        CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                        Out::Text(String::from("Пустой запрос даст ошибку")))
+                        .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                        .expect("Ошибка связи с консолью");
+
+                        continue;
                     }
 
-                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                    Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
-                    .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-                    .expect("Ошибка связи с консолью");
-                }
+                    let time_prompt: Instant = Instant::now();
 
-                Err(err) =>
-                {
-                    error!("Ошибка ответа!\n{:?}", err);
                     CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                    Out::Text(format!("Ошибка ответа!\n{:?}", err)))
+                    Out::Text(String::from("Запрос передан в обработку...")))
                     .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                     .expect("Ошибка связи с консолью");
 
-                    continue;
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                    .send(Out::CompressedStart)
+                    .expect("Ошибка связи с консолью");
+
+                    let response: Result<PromptResponse, _> =  agent.prompt(prompt).extended_details().await;
+
+                    CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг")
+                    .send(Out::CompressedEnd)
+                    .expect("Ошибка связи с консолью");
+
+                    match response
+                    {
+                        Ok(response) =>
+                        {
+                            let response: PromptResponse = response;
+
+                            info!("{}\n\n{:#?}\n\n{:?}\n", response.output, response.usage, time_prompt.elapsed());
+
+                            for call in response.completion_calls.iter()
+                            {
+                                info!("\nLLM call №{}: {:?}\n", call.call_index, call.usage);
+                            }
+
+                            for call in response.completion_calls.iter()
+                            {
+                                info!("\nLLM call №{} raw usage: {:?}\n", call.call_index, call.raw.get("usage"));
+                            }
+
+                            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                            Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
+                            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                            .expect("Ошибка связи с консолью");
+                        }
+
+                        Err(err) =>
+                        {
+                            error!("Ошибка ответа!\n{:?}", err);
+                            CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
+                            Out::Text(format!("Ошибка ответа!\n{:?}", err)))
+                            .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
+                            .expect("Ошибка связи с консолью");
+
+                            continue;
+                        }
+                    }
                 }
             }
+        } => {}
+
+        _ = shutdown_signal() =>
+        {
+            info!("Получен сигнал внезапного завершения");
         }
     }
 
     //Закрыть поток консоли
-    CONSOLE_OUT_TX.get().expect("Невозможное возможно").send(Out::Shutdown)
-    .inspect_err(|err| error!("Ошибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Ошибка связи с консолью");
+    if let Err(err) = CONSOLE_OUT_TX.get().expect("Невозможное возможно").send(Out::Shutdown)
+    {
+        error!("Ошибка связи с консолью - {:?}\t|\t{:?}", err, time_start.elapsed());
+    }
 
     //Подтянуть её поток
-    console_thread.join()
-    .inspect_err(|err| error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed()))
-    .expect("Ошибка присоединения потока консоли");
+    if let Err(err) = console_thread.join()
+    {
+        error!("Ошибка присоединения потока консоли - {:?}\t|\t{:?}", err, time_start.elapsed());
+    }
 
     info!("{:?}", time_start.elapsed());
     println!("{:?}", time_start.elapsed());
