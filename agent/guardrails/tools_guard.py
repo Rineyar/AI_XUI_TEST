@@ -138,7 +138,7 @@ def _host_is_local(hostname: str)->bool:
     if hostname in {"localhost", "localhost.localdomain",
         "ip6-localhost", "ip6-loopback", "host.docker.internal",
         "gateway.docker.internal", "kubernetes.docker.internal",
-        "host.containers.internal"}:
+        "host.containers.internal", "sandbox"}:
         return True
 
     if hostname.endswith(".local"):
@@ -198,7 +198,7 @@ def _guard_run_nuclei(args):
         raise ValueError("Nuclei timeout должен быть от 1 до 600 секунд")
 
 def _guard_run_zap(args):
-    target_url = urlsplit(args.get("url"))
+    target_url = urlsplit(args.get("target_url"))
     target_host = target_url.hostname
 
     if target_url.scheme not in ("http", "https"):

@@ -10,6 +10,7 @@ services:
     volumes:
       - sandbox-certs:/certs/client
       - sandbox-data:/home/rootless/.local/share/docker
+      - zap-plans-shared:/agent/workspace/zap_plans
 
     networks:
       - sandbox-control
@@ -58,6 +59,7 @@ services:
       - sandbox-certs:/certs/client:ro #Чтобы эта шелуха конты имела
       - ./to_agent:/agent/import:ro #Кидать в него
       - ./from_agent:/agent/workspace/results:rw #Кидать из него
+      - zap-plans-shared:/agent/workspace/zap_plans
 
     stdin_open: true
     tty: true
@@ -65,6 +67,7 @@ services:
 volumes:
   sandbox-certs:
   sandbox-data:
+  zap-plans-shared:
 
 networks:
   sandbox-control:
