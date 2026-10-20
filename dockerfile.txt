@@ -107,7 +107,7 @@ WORKDIR /agent
 
 # Для Zap
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --chown=root:root agent/tools/tools_py/zap-plans /agent/workspace/zap-plans
+COPY --chown=agent:agent agent/tools/tools_py/zap-plans /agent/workspace/zap_plans
 
 # Шаблоны nuclei
 COPY --from=nuclei-templates-builder nuclei-templates /agent/workspace/nuclei-templates
