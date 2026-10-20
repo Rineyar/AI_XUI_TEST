@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Customer Accounts - ApexFin Global Bank{% endblock %}
+
+{% block content %}
+<!--
+Author: Pradeep Singh
+License: Apache-2.0
+Purpose: Accounts search and registry view template.
+Architecture/Context: Enterprise banking customer account management.
+Dependencies/Side Effects: Interacts with /accounts endpoint.
+-->
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">Commercial Customer Registry</h3>
+        <p class="text-secondary small mb-0">Search and filter active accounts. Confidential reserves require Board authorization.</p>
+    </div>
+    <div>
+        <span class="badge bg-light text-secondary border px-3 py-2">
+            <i class="bi bi-shield-check me-1"></i> Data Access: Audited
+        </span>
+    </div>
+</div>
+
+<!-- Search & Filter Control Box -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('accounts_view') }}" class="row g-2 align-items-center" id="searchForm">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <label for="searchInput" class="input-group-text bg-white" style="cursor: pointer;"><i class="bi bi-search text-muted"></i></label>
+                    <input type="text" class="form-control" name="q" id="searchInput" placeholder="Search customer name..." value="{{ search_term }}" autocomplete="off" spellcheck="false" autofocus>
+                    {% if search_term %}
+                    <a href="{{ url_for('accounts_view', type=account_type) }}" class="btn btn-outline-secondary" title="Clear search text"><i class="bi bi-x-lg"></i></a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select name="type" class="form-select" id="typeSelect">
+                    <option value="ALL" {% if account_type == 'ALL' %}selected{% endif %}>All Commercial Types</option>
+                    <option value="Commercial Checking" {% if account_type == 'Commercial Checking' %}selected{% endif %}>Commercial Checking</option>
+                    <option value="Business Savings" {% if account_type == 'Business Savings' %}selected{% endif %}>Business Savings</option>
+                    <option value="Personal Premier" {% if account_type == 'Personal Premier' %}selected{% endif %}>Personal Premier</option>
+                    <option value="Treasury Liquidity" {% if account_type == 'Treasury Liquidity' %}selected{% endif %}>Treasury Liquidity</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-filter me-1"></i> Search</button>
+                <a href="{{ url_for('accounts_view') }}" class="btn btn-outline-secondary" title="Reset All Filters"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">Active Accounts ({{ accounts|length }} found)</h5>
+        {% if search_term %}
+        <span class="badge bg-secondary-subtle text-secondary font-monospace small">Filter: {{ search_term }}</span>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-secondary small text-uppercase">
+                <tr>
+                    <th>Account #</th>
+                    <th>Customer Name</th>
+                    <th>Corporate Email</th>
+                    <th>Account Type</th>
+                    <th>Balance (USD)</th>
+                    <th>Status</th>
+                    <th>Classification</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for acc in accounts %}
+                <tr>
+                    <td class="font-monospace fw-bold">{{ acc.account_number }}</td>
+                    <td>
+                        <div class="fw-semibold">{{ acc.customer_name }}</div>
+                    </td>
+                    <td class="font-monospace small text-muted">{{ acc.email }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ acc.account_type }}</span></td>
+                    <td class="fw-bold text-dark">
+                        ${{ "{:,.2f}".format(acc.balance) }}
+                    </td>
+                    <td>
+                        <span class="badge {% if acc.status == 'ACTIVE' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ acc.status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if acc.is_confidential == 1 %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger"><i class="bi bi-lock-fill me-1"></i>Restricted</span>
+                        {% else %}
+                            <span class="badge bg-light text-secondary border">Standard</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">No matching accounts found for query.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
