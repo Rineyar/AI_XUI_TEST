@@ -3,7 +3,7 @@
 
 #Сборка Rust
 #==========================================#
-#FROM rust:1.99.0-trixie AS rust-builder обновиться позже
+#FROM rust:1.99.0-trixie AS rust-builder TODO обновиться позже
 FROM rust:1.98.1-trixie AS rust-builder
 
 #Py среда для сборки и линковки
@@ -30,7 +30,8 @@ COPY agent/guardrails /build/agent/guardrails
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=agent-target,target=/build/agent/agent_core/target \
-    cargo build --release --features unsafe_tools \
+    cargo build --release \
+    #--features unsafe_tools \
     && cp /build/agent/agent_core/target/release/agent_core /build/agent_core
 
 #==========================================#
@@ -65,9 +66,8 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
-ENV NUCLEI_TEMPLATES_DIR=/agent/workspace/nuclei-templates
-ENV ZAP_PLANS_DIR=/agent/workspace/zap_plans
-ENV AUTO=0
+ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
+ENV AUTO=1
 ENV UNSAFE=1
 
 #Создание пользователя и Изолятора
@@ -95,19 +95,13 @@ COPY --from=rust-builder /build/agent_core /agent/agent_core/agent_core
 WORKDIR /agent
 
 #Его файлы на тест
-COPY --chown=root:root agent/agent_core/src /agent/workspace/self/agent_core
-COPY --chown=root:root agent/tools /agent/workspace/self/tools
-COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
-COPY --chown=root:root agent/skills /agent/workspace/self/skills
-
-# Добавление шаблонов nuclei
-COPY --from=nuclei-templates-builder /nuclei-templates /agent/workspace/nuclei-templates
-
-# Добавление планов zap
-COPY --chown=root:root /zap_plans /agent/workspace/zap_plans
-
+# COPY --chown=root:root agent/agent_core/src /agent/workspace/self/agent_core
+# COPY --chown=root:root agent/tools /agent/workspace/self/tools
+# COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
+# COPY --chown=root:root agent/skills /agent/workspace/self/skills
+# COPY --chown=root:root agent/system_prompt.md /agent/workspace/self
 #Добавление тестовых проектов
-COPY --chown=root:root tests /agent/workspace/tests
+# COPY --chown=root:root tests /agent/workspace/tests
 
 #Для Zap
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
@@ -121,7 +115,7 @@ COPY cleanup.sh /usr/local/bin/cleanup.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/cleanup.sh
 
 #Задание для автономной работы
-COPY agent/strategy.md /agent/strategy.md
+# COPY agent/strategy.md /agent/strategy.md
 
 # Агенту только в entrypoint
 USER root

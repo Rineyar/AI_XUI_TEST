@@ -55,10 +55,10 @@ services:
       - "host.docker.internal:host-gateway"
 
     volumes:
-      - ./agent/logs:/agent/logs
-      - sandbox-certs:/certs/client:ro  
-    #  - ./agent/logs/selfanalysys.md:/agent/workspace/selfanalysys.md #РАскоменчивать на свой страх и риск. Удалять только на страх
-      - ./agent/workspace:/agent/import:ro
+      - ./agent/logs:/agent/logs #Подтянуть логи
+      - sandbox-certs:/certs/client:ro #Чтобы эта шелуха конты имела
+      - ./to_agent:/agent/import:ro #Кидать в него
+      - ./from_agent:/agent/workspace/results:rw #Кидать из него
       - zap-plans-shared:/agent/workspace/zap_plans
 
     # 30 секунд, чтобы всё за собой убрал

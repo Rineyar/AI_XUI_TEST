@@ -7,9 +7,12 @@ Cargo.lock
 */logs
 *.rar
 *.zip
-*/workspace
 .idea
 /agent/tools/tools_py/__pycache__
 !tests/test_1/files/.env
 /vega
 strategy.md
+to_agent/
+from_agent/
+# Разрешаем .env во всех подпапках tests/
+!tests/**/.env

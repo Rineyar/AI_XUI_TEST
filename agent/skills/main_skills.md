@@ -93,7 +93,7 @@ When explicitly requested to perform self-analysis:
 5. Verify that each tool performs its intended operation, rather than relying solely on reported success.
 6. If a tool fails or behaves incorrectly, examine its relevant source code and configuration to identify the probable cause.
 7. Distinguish between implementation defects, environment limitations, guard denials, missing dependencies, and external service failures.
-8. Record the test results and diagnostic findings in `selfanalysys.md` within the writable workspace.
+8. Record the test results and diagnostic findings in `results/selfanalysys.md` within the writable workspace.
 
 ### Testing Rules
 
@@ -122,7 +122,7 @@ A successful function call alone is insufficient for PASS if the expected operat
 
 ### Reporting
 
-Write the results to `selfanalysys.md`.
+Write the results to `results/selfanalysys.md`.
 
 The report should include:
 
