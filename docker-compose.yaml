@@ -61,8 +61,6 @@ services:
       - ./from_agent:/agent/workspace/results:rw #Кидать из него
       - zap-plans-shared:/agent/workspace/zap_plans
 
-    # 30 секунд, чтобы всё за собой убрал
-    stop_grace_period: 30s 
     stdin_open: true
     tty: true
 

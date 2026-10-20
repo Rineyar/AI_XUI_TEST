@@ -66,8 +66,9 @@ LABEL description="Agent runtime test container"
 ENV PYTHONUNBUFFERED=1
 ENV RUST_BACKTRACE=1
 ENV LC_ALL=C.UTF-8
-ENV NUCLEI_TEMPLATES_DIR=/agent/tools/nuclei-templates
-ENV AUTO=1
+ENV NUCLEI_TEMPLATES_DIR=/agent/workspace/nuclei-templates
+ENV ZAP_PLANS_DIR=/agent/workspace/zap_plans
+ENV AUTO=0
 ENV UNSAFE=1
 
 #Создание пользователя и Изолятора
@@ -100,11 +101,16 @@ WORKDIR /agent
 # COPY --chown=root:root agent/guardrails /agent/workspace/self/guardrails
 # COPY --chown=root:root agent/skills /agent/workspace/self/skills
 # COPY --chown=root:root agent/system_prompt.md /agent/workspace/self
+
 #Добавление тестовых проектов
 # COPY --chown=root:root tests /agent/workspace/tests
 
-#Для Zap
+# Для Zap
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --chown=root:root zap-plans /agent/workspace/zap-plans
+
+# Шаблоны nuclei
+COPY --from=nuclei-templates-builder nuclei-templates /agent/workspace/nuclei-templates
 
 #Стартуем
 #==========================================#
