@@ -14,6 +14,7 @@ use bollard::query_parameters::CreateImageOptions;
 use std::{sync::OnceLock, time::Instant};
 use std::sync::{Mutex, MutexGuard};
 use std::collections::HashSet;
+use std::process::Command; //Для удаления контов после завершения работы
 
 use tracing::{error, info, warn}; //Макросы логирования
 
@@ -28,6 +29,26 @@ struct SandboxManager
 {
     docker: Docker,
     containers: Mutex<HashSet<String>>
+}
+
+impl Drop for SandboxManager
+{
+    fn drop(&mut self)
+    {
+        let containers: Vec<String> = self.containers.get_mut().unwrap_or_else(|err| err.into_inner()).drain().collect();
+
+        for container in containers.into_iter()
+        {
+            match Command::new("docker").args(["rm", "-f", container.as_str()]).status()
+            {
+                Ok(status) if status.success() => {}
+
+                Ok(status) => { error!("Ошибка удаления контейнера {}: {}", container, status); } 
+
+                Err(err) => { error!("Ошибка вызова Docker для контейнера {}: {:?}", container, err); }
+            }
+        }
+    }
 }
 
 pub async fn init_sandbox_manager(time: &Instant)
