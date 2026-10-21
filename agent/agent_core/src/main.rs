@@ -274,13 +274,11 @@ async fn main()
         {
             let mut headers: HeaderMap = HeaderMap::new();
 
-            headers.insert(
-        "X-VEGA-Agent-Session",
-        var("VEGA_AGENT_SESSION_ID").inspect_err(|err|
-            error!("Отсутствует VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            headers.insert("X-VEGA-Agent-Session", var("VEGA_AGENT_SESSION_ID")
+            .inspect_err(|err| error!("Отсутствует VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Отсутствует VEGA_AGENT_SESSION_ID")
-            .parse().inspect_err(|err|
-            error!("Некорректный VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
+            .parse()
+            .inspect_err(|err| error!("Некорректный VEGA_AGENT_SESSION_ID - {:?}\t|\t{:?}", err, time_start.elapsed()))
             .expect("Некорректный VEGA_AGENT_SESSION_ID"));
 
             let model: Client<OpenAICompletionsExt> = CompletionsClient::builder() //Сборка клиента
