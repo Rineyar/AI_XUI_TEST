@@ -466,7 +466,7 @@ async fn main()
                         }
 
                         CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                        Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
+                        Out::Text(format!("{}\n{:?}\n\n", response.output, time_prompt.elapsed())))
                         .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                         .expect("Ошибка связи с консолью");
                     }
@@ -556,7 +556,7 @@ async fn main()
                             }
 
                             CONSOLE_OUT_TX.get().expect("TX-RX консоли лёг").send(
-                            Out::Text(format!("{}\n{:?}\n", response.output, time_prompt.elapsed())))
+                            Out::Text(format!("{}\n{:?}\n\n", response.output, time_prompt.elapsed())))
                             .inspect_err(|err| error!("\nОшибка связи с консолью - {}\t|\t{:?}", err, time_start.elapsed()))
                             .expect("Ошибка связи с консолью");
                         }
